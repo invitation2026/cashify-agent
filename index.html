@@ -1,0 +1,1080 @@
+<!-- === SECTION 1: DOCTYPE, HTML ROOT & META TAGS === -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#1e3a8a" />
+    <title>Cashify Pickup Agent</title>
+
+    <!-- === SECTION 2: EXTERNAL SCRIPTS & LIBRARIES (CDN) === -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>   <!-- 🔥 NEW -->
+
+<!-- ZXing for barcode -->
+<script src="https://unpkg.com/@zxing/library@0.21.0/umd/index.min.js"></script>
+
+<!-- Tesseract.js for OCR -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- === SECTION 3: GLOBAL & ORIGINAL STYLES (CSS) === -->
+    <style>
+        /* ===== ORIGINAL STYLES ===== */
+        * { -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            overscroll-behavior: none;
+        }
+        .glass {
+            background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .btn-bounce:active { transform: scale(0.96); }
+        .btn-bounce { transition: transform 0.15s ease; }
+
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .slide-up { animation: slideUp 0.35s cubic-bezier(0.16,1,0.3,1); }
+        @keyframes slideUp {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+
+        .pulse-ring { animation: pulseRing 2s cubic-bezier(0.215,0.61,0.355,1) infinite; }
+        @keyframes pulseRing {
+            0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(34,197,94,0); }
+            100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+        }
+
+        .status-card {
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+        .status-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 100%);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .status-card:active::before { opacity: 1; }
+
+        .reason-btn {
+            transition: all 0.2s;
+            border: 2px solid #e5e7eb;
+        }
+        .reason-btn.active {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+            border-color: #2563eb;
+            transform: scale(1.02);
+        }
+        .reason-btn.active i { color: white !important; }
+        .reason-btn.active .icon-wrap { background: rgba(255,255,255,0.2); }
+
+        .input-field {
+            transition: all 0.2s;
+            border: 2px solid #e5e7eb;
+            background: #fafafa;
+        }
+        .input-field:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+            background: #fff;
+        }
+
+        .scanner-overlay {
+            backdrop-filter: blur(8px);
+            background: rgba(0,0,0,0.92);
+        }
+        .scan-frame {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 4/3;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .scan-frame video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .scan-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+        }
+        .scan-box {
+            width: 85%;
+            height: 40%;
+            border: 3px solid #3b82f6;
+            border-radius: 12px;
+            position: relative;
+            box-shadow: 0 0 0 9999px rgba(0,0,0,0.3);
+        }
+        .scan-box::before {
+            content: '';
+            position: absolute;
+            left: 5%;
+            right: 5%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #10b981, transparent);
+            animation: scanLine 1.8s ease-in-out infinite;
+            box-shadow: 0 0 10px #10b981;
+        }
+        @keyframes scanLine {
+            0%, 100% { top: 10%; }
+            50% { top: 90%; }
+        }
+        .corner {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            border: 4px solid #10b981;
+        }
+        .corner.tl { top: -2px; left: -2px; border-right: none; border-bottom: none; border-top-left-radius: 12px; }
+        .corner.tr { top: -2px; right: -2px; border-left: none; border-bottom: none; border-top-right-radius: 12px; }
+        .corner.bl { bottom: -2px; left: -2px; border-right: none; border-top: none; border-bottom-left-radius: 12px; }
+        .corner.br { bottom: -2px; right: -2px; border-left: none; border-top: none; border-bottom-right-radius: 12px; }
+
+        .scan-hint {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.75);
+            color: white;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 500;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+
+        ::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .flash-green {
+            animation: flashGreen 0.5s ease;
+        }
+        @keyframes flashGreen {
+            0%, 100% { background: #fafafa; }
+            50% { background: #bbf7d0; }
+        }
+
+        .spinner {
+            border: 3px solid #e5e7eb;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .btn-scan-imei {
+            background: #1e40af;
+            color: white;
+            font-weight: 600;
+            padding: 8px 16px;
+            border-radius: 10px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 8px rgba(30,64,175,0.3);
+        }
+        .btn-scan-imei:active { transform: scale(0.95); }
+        .btn-scan-imei i { width: 18px; height: 18px; }
+
+        .mode-toggle {
+            display: flex;
+            gap: 6px;
+            background: #f1f5f9;
+            border-radius: 10px;
+            padding: 4px;
+            margin-bottom: 12px;
+        }
+        .mode-toggle button {
+            flex: 1;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: transparent;
+            color: #64748b;
+        }
+        .mode-toggle button.active {
+            background: #fff;
+            color: #1e293b;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .mode-toggle button:active { transform: scale(0.96); }
+
+        .btn-capture {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border: none;
+            padding: 12px 28px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 20px rgba(16,185,129,0.4);
+            margin-top: 8px;
+        }
+        .btn-capture:active { transform: scale(0.95); }
+        .btn-capture:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .btn-capture i { width: 20px; height: 20px; }
+
+        .btn-capture-secondary {
+            background: #e2e8f0;
+            color: #1e293b;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 50px;
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+        }
+        .btn-capture-secondary:active { transform: scale(0.95); }
+
+        .ocr-progress {
+            height: 4px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        .ocr-progress .bar {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #10b981);
+            width: 0%;
+            border-radius: 4px;
+            transition: width 0.3s;
+        }
+
+        .imei-result {
+            background: #f0fdf4;
+            border: 2px solid #86efac;
+            border-radius: 10px;
+            padding: 8px 12px;
+            margin-top: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #065f46;
+            display: none;
+            text-align: center;
+            word-break: break-all;
+        }
+        .imei-result.show { display: block; animation: fadeIn 0.3s ease; }
+
+        /* Pending list */
+        .pending-item {
+            border-left: 4px solid #f59e0b;
+            transition: all 0.2s;
+        }
+        .pending-item:active { transform: scale(0.99); }
+        .pending-item .done-btn {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .pending-item .done-btn:active { transform: scale(0.94); }
+        .pending-item .done-btn i { width: 16px; height: 16px; }
+
+        .pending-empty {
+            text-align: center;
+            padding: 24px 16px;
+            color: #94a3b8;
+        }
+        .pending-empty i { width: 40px; height: 40px; margin-bottom: 8px; color: #cbd5e1; }
+
+        .badge-onway {
+            background: #dbeafe;
+            color: #1e40af;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 10px;
+            border-radius: 12px;
+            display: inline-block;
+        }
+        .badge-pending {
+            background: #fef3c7;
+            color: #92400e;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 10px;
+            border-radius: 12px;
+            display: inline-block;
+        }
+
+        .tab-bar {
+            display: flex;
+            gap: 4px;
+            background: #f1f5f9;
+            border-radius: 12px;
+            padding: 4px;
+            margin-bottom: 14px;
+        }
+        .tab-bar button {
+            flex: 1;
+            padding: 8px 12px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: transparent;
+            color: #64748b;
+        }
+        .tab-bar button.active {
+            background: #fff;
+            color: #1e293b;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .tab-bar button:active { transform: scale(0.96); }
+        .tab-bar button i { width: 16px; height: 16px; display: inline-block; margin-right: 4px; }
+
+        .pending-list-container {
+            max-height: 380px;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .pending-list-container::-webkit-scrollbar { display: none; }
+
+        .pending-badge {
+            background: #ef4444;
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 1px 8px;
+            border-radius: 12px;
+            margin-left: 6px;
+            display: inline-block;
+            min-width: 20px;
+            text-align: center;
+        }
+
+        /* ===== LOGIN STYLES ===== */
+        .auth-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .auth-box {
+            background: #fff;
+            border-radius: 28px;
+            max-width: 400px;
+            width: 100%;
+            padding: 30px 28px;
+            box-shadow: 0 30px 70px rgba(0,0,0,0.3);
+            max-height: 95vh;
+            overflow-y: auto;
+        }
+        .auth-box .logo-icon {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 12px;
+            box-shadow: 0 8px 24px rgba(79,70,229,0.3);
+        }
+        .auth-box .logo-icon i {
+            width: 32px;
+            height: 32px;
+            color: #fff;
+        }
+        .auth-box h2 {
+            font-size: 22px;
+            font-weight: 700;
+            color: #1e293b;
+            text-align: center;
+            margin-bottom: 4px;
+        }
+        .auth-box .sub {
+            text-align: center;
+            color: #94a3b8;
+            font-size: 14px;
+            margin-bottom: 24px;
+        }
+        .auth-box .field-group {
+            margin-bottom: 16px;
+        }
+        .auth-box label {
+            font-size: 13px;
+            font-weight: 600;
+            color: #1e293b;
+            display: block;
+            margin-bottom: 4px;
+        }
+        .auth-box input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 15px;
+            outline: none;
+            transition: border 0.2s;
+            background: #fff;
+        }
+        .auth-box input:focus {
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
+        }
+        .auth-btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 14px;
+            font-size: 16px;
+            font-weight: 700;
+            color: #fff;
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            cursor: pointer;
+            transition: 0.2s;
+            margin-top: 6px;
+        }
+        .auth-btn:active { transform: scale(0.96); }
+        .auth-btn:hover { opacity: 0.9; }
+        .auth-error {
+            color: #dc2626;
+            font-size: 13px;
+            margin-top: 4px;
+            display: none;
+        }
+
+        /* User badge */
+        .user-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: #eef2ff;
+            padding: 4px 10px 4px 8px;
+            border-radius: 30px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #4f46e5;
+        }
+        .user-badge .sep {
+            color: #cbd5e1;
+            font-weight: 300;
+        }
+        .user-badge .action-btn {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 0 2px;
+            transition: 0.2s;
+            display: inline-flex;
+            align-items: center;
+        }
+        .user-badge .action-btn:hover { color: #4f46e5; }
+        .user-badge .logout-btn:hover { color: #dc2626; }
+
+        /* Mobile optimizations */
+        @media (max-width: 480px) {
+            .auth-box { padding: 24px 18px; }
+            .auth-box h2 { font-size: 20px; }
+            .user-badge { font-size: 12px; gap: 4px; padding: 3px 8px; }
+        }
+
+        /* ----- NEW ATTENDANCE STYLES ----- */
+        .attendance-status {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 14px;
+            display: inline-block;
+        }
+        .attendance-status.present {
+            background: #bbf7d0;
+            color: #065f46;
+        }
+        .attendance-status.absent {
+            background: #fecaca;
+            color: #991b1b;
+        }
+        .attendance-status.blocked {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        .attendance-status.not-marked {
+            background: #e2e8f0;
+            color: #64748b;
+        }
+        .otp-input-box {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .otp-input-box input {
+            flex: 1;
+            padding: 12px 14px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: 4px;
+            text-align: center;
+            outline: none;
+            transition: border 0.2s;
+            background: #fafafa;
+        }
+        .otp-input-box input:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+        }
+        .otp-input-box button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 15px;
+            background: #3b82f6;
+            color: white;
+            cursor: pointer;
+            transition: 0.2s;
+            white-space: nowrap;
+        }
+        .otp-input-box button:active { transform: scale(0.95); }
+        .otp-input-box button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .attendance-history {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 12px;
+        }
+        .attendance-history .day-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 8px;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 13px;
+        }
+        .attendance-history .day-item .date { color: #64748b; }
+        .attendance-history .day-item .status { font-weight: 600; }
+        .attendance-history .day-item .status.present { color: #059669; }
+        .attendance-history .day-item .status.absent { color: #dc2626; }
+        .attendance-history .day-item .status.blocked { color: #d97706; }
+        .attendance-history .day-item .status.not-marked { color: #94a3b8; }
+
+        /* ===== 🔥 SPEC SELECTOR (RAM / STORAGE / NETWORK) ===== */
+        .spec-group { margin-bottom: 4px; }
+        .spec-label { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+        .spec-label .t { font-size:11px; font-weight:800; color:#6b7280; letter-spacing:.6px; }
+        .spec-label .picked { font-size:12px; font-weight:800; color:#2563eb; }
+        .spec-label .picked.empty { color:#dc2626; }
+        .chip-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+        .chip-grid.cols-3 { grid-template-columns:repeat(3,minmax(0,1fr)); }
+        .spec-chip {
+            padding:13px 4px; border-radius:14px; border:2px solid #e5e7eb; background:#fff;
+            font-size:15px; font-weight:800; color:#374151; text-align:center; line-height:1.1;
+            transition:all .15s ease; -webkit-tap-highlight-color:transparent;
+        }
+        .spec-chip small { display:block; font-size:9px; font-weight:700; color:#9ca3af; margin-top:2px; letter-spacing:.4px; }
+        .spec-chip:active { transform:scale(0.95); }
+        .spec-chip.active {
+            border-color:#2563eb; background:linear-gradient(135deg,#3b82f6,#2563eb); color:#fff;
+            box-shadow:0 6px 16px rgba(37,99,235,.35);
+        }
+        .spec-chip.active small { color:rgba(255,255,255,.85); }
+        .spec-chip.net.active { border-color:#059669; background:linear-gradient(135deg,#10b981,#059669); box-shadow:0 6px 16px rgba(5,150,105,.35); }
+        .spec-summary {
+            margin-top:10px; padding:14px; border-radius:16px; border:2px dashed #cbd5e1; background:#f8fafc;
+            text-align:center;
+        }
+        .spec-summary .head { font-size:10px; font-weight:800; color:#94a3b8; letter-spacing:1px; }
+        .spec-summary .body { font-size:18px; font-weight:900; color:#0f172a; margin-top:4px; }
+        .spec-summary.ok { border-style:solid; border-color:#22c55e; background:#f0fdf4; }
+        .spec-summary.ok .body { color:#15803d; }
+        .spec-missing { font-size:12px; font-weight:700; color:#dc2626; margin-top:6px; }
+    </style>
+</head>
+
+<!-- === SECTION 4: BODY START, OFFLINE BANNER & AUTH OVERLAY (LOGIN) === -->
+<body class="no-scrollbar">
+
+    <!-- Offline Banner -->
+    <div id="offlineBanner" class="bg-red-500 text-white text-center py-2 text-sm font-semibold hidden">
+        📡 Offline - Data will sync when back online
+    </div>
+
+    <!-- ===== AUTH OVERLAY (Login Only) ===== -->
+    <div id="authOverlay" class="auth-overlay">
+        <div class="auth-box slide-up">
+            <div class="logo-icon">
+                <i data-lucide="package"></i>
+            </div>
+            <h2>Welcome Back</h2>
+            <p class="sub">Login to your agent account</p>
+
+            <div class="field-group">
+                <label>Username</label>
+                <input type="text" id="loginUsername" placeholder="Enter username" autocomplete="username" />
+            </div>
+            <div class="field-group">
+                <label>Password</label>
+                <input type="password" id="loginPassword" placeholder="Enter password" autocomplete="current-password" />
+            </div>
+            <div id="loginError" class="auth-error"></div>
+            <button class="auth-btn" onclick="loginUser()">Login</button>
+        </div>
+    </div>
+
+    <!-- === SECTION 5: MAIN APP HEADER === -->
+    <!-- ===== MAIN APP ===== -->
+    <div id="mainApp" class="max-w-md mx-auto min-h-screen pb-8" style="display:none;">
+
+        <!-- Header -->
+        <div class="glass sticky top-0 z-40 px-5 py-4 shadow-lg">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                        <i data-lucide="package" class="w-6 h-6 text-white"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-bold text-gray-800">Cashify Pickup</h1>
+                        <p class="text-xs text-gray-500">Agent Portal</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <div id="connectionStatus" class="flex items-center gap-1 px-2 py-1 bg-green-50 rounded-full">
+                        <div class="w-1.5 h-1.5 bg-green-500 rounded-full pulse-ring"></div>
+                        <span class="text-[10px] font-medium text-green-700 hidden sm:inline">Online</span>
+                    </div>
+                    <div class="user-badge" id="userBadge">
+                        <span id="userNameDisplay" class="text-xs">Agent</span>
+                        <span class="sep">|</span>
+                        <button class="action-btn" onclick="showChangePassword()" title="Change Password">
+                            <i data-lucide="key" class="w-3.5 h-3.5"></i>
+                        </button>
+                        <button class="action-btn logout-btn" onclick="logoutUser()" title="Logout">
+                            <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content Area -->
+        <div class="px-4 py-5">
+
+            <!-- === SECTION 6: TAB BAR NAVIGATION === -->
+            <!-- ===== TAB BAR: Pickup | Pending | Attendance ===== -->
+            <div class="tab-bar mb-4" id="mainTabBar">
+                <button class="active" data-tab="pickup" onclick="switchTab('pickup')">
+                    <i data-lucide="package-check"></i> Pickup
+                </button>
+                <button data-tab="pending" onclick="switchTab('pending')">
+                    <i data-lucide="list-todo"></i> Pending
+                    <span id="pendingCountBadgeMain" class="pending-badge">0</span>
+                </button>
+                <!-- 🔥 Added id="attendanceTabBtn" so admin can hide it -->
+                <button data-tab="attendance" id="attendanceTabBtn" onclick="switchTab('attendance')">
+                    <i data-lucide="clipboard-check"></i> Attendance
+                </button>
+            </div>
+
+            <!-- === SECTION 7: TAB CONTENT - PICKUP (Order ID, Status, Stats, Dynamic Form) === -->
+            <!-- ===== TAB: PICKUP ===== -->
+            <div id="tab-pickup" class="tab-content">
+                <!-- STEP 1: Order ID + Status Selection -->
+                <div id="step-order" class="space-y-4 fade-in">
+
+                    <!-- Order ID Card -->
+                    <div class="glass rounded-2xl p-5 shadow-xl">
+                        <label class="flex items-center gap-2 text-sm font-bold text-gray-700 mb-3">
+                            <i data-lucide="hash" class="w-4 h-4 text-blue-600"></i>
+                            ORDER ID
+                        </label>
+                        <div class="relative">
+                            <input type="text" id="orderId" placeholder="SBMR3B0Q2P85FE91"
+                            class="input-field w-full p-4 rounded-xl text-lg font-mono uppercase outline-none"
+                            autocomplete="off" autocapitalize="characters" />
+                            <button onclick="pasteOrderId()" class="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-blue-600">
+                                <i data-lucide="clipboard-paste" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Status Selection -->
+                    <div class="glass rounded-2xl p-5 shadow-xl">
+                        <label class="flex items-center gap-2 text-sm font-bold text-gray-700 mb-3">
+                            <i data-lucide="list-checks" class="w-4 h-4 text-blue-600"></i>
+                            SELECT STATUS
+                        </label>
+
+                        <div class="space-y-3">
+                            <button onclick="showForm('pickup')" class="status-card btn-bounce w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white p-5 rounded-2xl font-bold text-lg shadow-lg flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                                        <i data-lucide="check-circle-2" class="w-6 h-6"></i>
+                                    </div>
+                                    <span>Pickup Completed</span>
+                                </div>
+                                <i data-lucide="chevron-right" class="w-5 h-5"></i>
+                            </button>
+
+                            <button onclick="showForm('rejected')" class="status-card btn-bounce w-full bg-gradient-to-r from-red-500 to-rose-600 text-white p-5 rounded-2xl font-bold text-lg shadow-lg flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                                        <i data-lucide="x-circle" class="w-6 h-6"></i>
+                                    </div>
+                                    <span>Rejected</span>
+                                </div>
+                                <i data-lucide="chevron-right" class="w-5 h-5"></i>
+                            </button>
+
+                            <button onclick="showForm('reschedule')" class="status-card btn-bounce w-full bg-gradient-to-r from-amber-500 to-orange-600 text-white p-5 rounded-2xl font-bold text-lg shadow-lg flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                                        <i data-lucide="clock" class="w-6 h-6"></i>
+                                    </div>
+                                    <span>Reschedule / Pending</span>
+                                </div>
+                                <i data-lucide="chevron-right" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Today's Stats -->
+                    <div class="glass rounded-2xl p-5 shadow-xl">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-sm font-bold text-gray-700 flex items-center gap-2">
+                                <i data-lucide="bar-chart-3" class="w-4 h-4 text-blue-600"></i>
+                                TODAY'S STATS
+                            </h3>
+                            <button onclick="loadTodayStats()" class="text-xs text-blue-600 font-semibold flex items-center gap-1">
+                                <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                                Refresh
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="bg-green-50 rounded-xl p-3 text-center">
+                                <div id="statPickup" class="text-2xl font-bold text-green-600">0</div>
+                                <div class="text-xs text-gray-600 font-medium">Pickup</div>
+                            </div>
+                            <div class="bg-red-50 rounded-xl p-3 text-center">
+                                <div id="statReject" class="text-2xl font-bold text-red-600">0</div>
+                                <div class="text-xs text-gray-600 font-medium">Reject</div>
+                            </div>
+                            <div class="bg-amber-50 rounded-xl p-3 text-center">
+                                <div id="statReschedule" class="text-2xl font-bold text-amber-600">0</div>
+                                <div class="text-xs text-gray-600 font-medium">Pending</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- STEP 2: Dynamic Form -->
+                <div id="step-form" class="hidden space-y-4 slide-up">
+
+                    <button onclick="goBack()" class="btn-bounce flex items-center gap-2 text-blue-600 font-bold px-4 py-2 rounded-xl glass shadow">
+                        <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                        <span>Back</span>
+                    </button>
+
+                    <div id="formHeader" class="glass rounded-2xl p-5 shadow-xl">
+                        <div class="flex items-center gap-3">
+                            <div id="formIcon" class="w-12 h-12 rounded-xl flex items-center justify-center"></div>
+                            <div>
+                                <h2 id="formTitle" class="text-xl font-bold text-gray-800"></h2>
+                                <p id="formSubtitle" class="text-xs text-gray-500"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="glass rounded-2xl p-4 shadow-lg">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-gray-500">ORDER ID</span>
+                            <span id="displayOrderId" class="font-mono font-bold text-gray-800 text-sm"></span>
+                        </div>
+                    </div>
+
+                    <div id="formFields" class="glass rounded-2xl p-5 shadow-xl space-y-4"></div>
+
+                    <button onclick="submitData()" id="submitBtn" class="btn-bounce w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-2xl font-bold text-lg shadow-xl flex items-center justify-center gap-2">
+                        <i data-lucide="send" class="w-5 h-5"></i>
+                        <span>Submit & Send to WhatsApp</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- === SECTION 8: TAB CONTENT - PENDING ORDERS === -->
+            <!-- ===== TAB: PENDING ===== -->
+            <div id="tab-pending" class="tab-content" style="display:none;">
+                <div class="glass rounded-2xl p-5 shadow-xl">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-bold text-gray-700 flex items-center gap-2">
+                            <i data-lucide="list-todo" class="w-4 h-4 text-amber-600"></i>
+                            PENDING ORDERS
+                            <span id="pendingCountBadge" class="pending-badge">0</span>
+                        </h3>
+                        <button onclick="loadPendingOrders()" class="text-xs text-blue-600 font-semibold flex items-center gap-1">
+                            <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                            Refresh
+                        </button>
+                    </div>
+
+                    <!-- Tab: All / On the way -->
+                    <div class="tab-bar" id="pendingTabBar">
+                        <button class="active" data-filter="all" onclick="setPendingFilter('all')">
+                            <i data-lucide="list"></i> All
+                        </button>
+                        <button data-filter="onway" onclick="setPendingFilter('onway')">
+                            <i data-lucide="map-pin"></i> On the way
+                        </button>
+                    </div>
+
+                    <div id="pendingList" class="pending-list-container">
+                        <div class="pending-empty">
+                            <i data-lucide="inbox"></i>
+                            <p class="text-sm font-medium">No pending orders</p>
+                            <p class="text-xs text-gray-400 mt-1">Orders you reschedule will appear here</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- === SECTION 9: TAB CONTENT - ATTENDANCE === -->
+            <!-- ===== TAB: ATTENDANCE & SALARY ===== -->
+    <div id="tab-attendance" class="tab-content" style="display:none;">
+        <div class="glass rounded-2xl p-5 shadow-sm border border-gray-100 mb-4">
+            <div class="flex items-center justify-between mb-3">
+                <div>
+                    <h2 class="text-base font-bold text-gray-800">Daily Attendance</h2>
+                    <p id="attendanceDateDisplay" class="text-xs text-gray-500 font-medium"></p>
+                </div>
+                <div id="attendanceBadgeContainer">
+                    <span id="currentStatusBadge" class="px-3 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">Unmarked</span>
+                </div>
+            </div>
+
+            <!-- Attendance Action Buttons -->
+            <div id="attendanceActionGrid" class="grid grid-cols-2 gap-3 mt-3">
+                <button type="button" id="btnMarkPresent" onclick="openAttendanceOtpModal()" class="btn-bounce p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex flex-col items-center justify-center gap-1 hover:bg-emerald-100">
+                    <span class="text-2xl">✅</span>
+                    <span class="font-bold text-sm">Present</span>
+                    <span class="text-[10px] text-emerald-600 font-medium">Requires Admin OTP</span>
+                </button>
+                <button type="button" id="btnMarkAbsent" onclick="handleMarkAbsent()" class="btn-bounce p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 flex flex-col items-center justify-center gap-1 hover:bg-rose-100">
+                    <span class="text-2xl">❌</span>
+                    <span class="font-bold text-sm">Non-Present</span>
+                    <span class="text-[10px] text-rose-600 font-medium">Mark as Absent</span>
+                </button>
+            </div>
+
+            <div id="attendanceLockNotice" class="hidden mt-4 p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800">
+                🔒 Attendance for today is recorded. Contact admin for any corrections.
+            </div>
+        </div>
+
+        <!-- Basic Salary Summary Card (Admin Approved Only) -->
+        <div id="salarySummaryCard" class="glass rounded-2xl p-5 shadow-sm border border-gray-100 mb-4">
+            <div class="flex items-center justify-between mb-3 border-b border-gray-100 pb-2">
+                <h3 class="text-sm font-bold text-gray-800 flex items-center gap-2">
+                    <span>💼</span> Salary Summary
+                </h3>
+                <span id="salaryStatusBadge" class="text-[11px] px-2.5 py-0.5 rounded-full font-semibold bg-gray-100 text-gray-600">Pending Approval</span>
+            </div>
+
+            <div id="salaryApprovedContent" class="space-y-2">
+                <div class="flex justify-between items-center text-xs text-gray-600">
+                    <span>Total Base Salary:</span>
+                    <span id="agentTotalSalary" class="font-semibold text-gray-800">₹0</span>
+                </div>
+                <div class="flex justify-between items-center text-xs text-rose-600">
+                    <span>Deductions / Half-day:</span>
+                    <span id="agentDeductions" class="font-semibold">-₹0</span>
+                </div>
+                <div class="flex justify-between items-center text-sm font-bold text-emerald-700 pt-2 border-t border-gray-100">
+                    <span>Final Payable:</span>
+                    <span id="agentFinalSalary">₹0</span>
+                </div>
+            </div>
+
+            <div id="salaryPendingNotice" class="text-xs text-gray-500 py-2 text-center">
+                Salary details will appear here once approved by Admin.
+            </div>
+        </div>
+
+        <!-- Attendance History (Last 7 Days) -->
+        <div class="glass rounded-2xl p-5 shadow-sm border border-gray-100">
+            <h3 class="text-sm font-bold text-gray-800 mb-3">Recent Attendance</h3>
+            <div id="attendanceHistoryList" class="space-y-2 text-xs">
+                <div class="text-center text-gray-400 py-3">Loading history...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- === SECTION 10: SCANNER MODAL (IMEI/OCR) === -->
+    <!-- Scanner Modal (unchanged) -->
+    <div id="scannerModal" class="hidden fixed inset-0 scanner-overlay z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl p-5 w-full max-w-sm shadow-2xl">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="font-bold text-lg flex items-center gap-2">
+                    <i data-lucide="scan-line" class="w-5 h-5 text-blue-600"></i>
+                    Scan IMEI
+                </h3>
+                <button onclick="stopScanner()" class="p-2 hover:bg-gray-100 rounded-full">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Mode Toggle -->
+            <div class="mode-toggle" id="scanModeToggle">
+                <button class="active" data-mode="barcode" onclick="setScanMode('barcode')">
+                    <i data-lucide="barcode" class="w-3.5 h-3.5 inline mr-1"></i> Barcode
+                </button>
+                <button data-mode="ocr" onclick="setScanMode('ocr')">
+                    <i data-lucide="monitor" class="w-3.5 h-3.5 inline mr-1"></i> Screen (*#06#)
+                </button>
+            </div>
+
+            <div class="scan-frame" id="scanFrame">
+                <video id="scanVideo" autoplay playsinline muted></video>
+                <div class="scan-overlay">
+                    <div class="scan-box">
+                        <div class="corner tl"></div>
+                        <div class="corner tr"></div>
+                        <div class="corner bl"></div>
+                        <div class="corner br"></div>
+                    </div>
+                </div>
+                <div class="scan-hint" id="scanHint">📱 Barcode ko box me align karo</div>
+            </div>
+
+            <div id="scanStatus" class="text-xs text-gray-500 text-center mt-3 flex items-center justify-center gap-2">
+                <span class="spinner" id="scanSpinner"></span>
+                <span id="scanStatusText">Initializing camera...</span>
+            </div>
+
+            <!-- OCR Progress -->
+            <div class="ocr-progress" id="ocrProgress" style="display:none;">
+                <div class="bar" id="ocrProgressBar"></div>
+            </div>
+
+            <!-- IMEI Result -->
+            <div class="imei-result" id="imeiResult">
+                <span id="imeiResultText"></span>
+            </div>
+
+            <!-- Capture Button (for OCR mode) -->
+            <button class="btn-capture" id="captureBtn" onclick="startOCRScanning()" style="display:none;">
+                <i data-lucide="camera"></i>
+                Capture & Read IMEI
+            </button>
+
+            <div class="mt-2 flex gap-2">
+                <button onclick="stopScanner()" class="btn-capture-secondary">
+                    Cancel
+                </button>
+            </div>
+
+            <div class="mt-3 p-3 bg-blue-50 rounded-xl text-xs text-blue-900" id="scanTip">
+                <strong>💡 Tip:</strong> Phone box ya back panel pe IMEI barcode hota hai. Usko scan karo. Agar barcode nahi hai toh "Screen" mode me *#06# screen dikhao aur Capture dabao — auto detect ho jaega!
+            </div>
+        </div>
+    </div>
+
+    <!-- === SECTION 11: EXTERNAL SCRIPT LINK & CLOSING TAGS === -->
+    <script src="script.js"></script>
+
+
+<!-- ================================================================ -->
+<!-- MANDATORY ATTENDANCE FLOATING MODAL (Restores Present/Absent gate) -->
+<!-- ================================================================ -->
+<div id="mandatoryAttendanceModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md hidden transition-all duration-300">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 text-center transform transition-all border border-slate-100">
+        <div class="w-16 h-16 rounded-2xl bg-[#E6FAF6] text-[#0FA88B] flex items-center justify-center mx-auto mb-4 shadow-inner">
+            <i data-lucide="calendar-check-2" class="w-8 h-8"></i>
+        </div>
+        
+        <h2 class="text-2xl font-black text-slate-900 tracking-tight">Daily Attendance</h2>
+        <p class="text-sm text-slate-500 mt-1 mb-6">
+            Please mark your attendance for <span id="floatingAttDate" class="font-bold text-slate-800"></span> before proceeding to your tasks.
+        </p>
+
+        <!-- Attendance Action Buttons -->
+        <div class="space-y-3">
+            <button onclick="promptPresentFromFloating()" class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-[#0FA88B] to-[#12CAA7] text-white font-bold text-base shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 active:scale-[0.98] transition flex items-center justify-center gap-2">
+                <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+                Mark Present
+            </button>
+            <button onclick="confirmAbsentFromFloating()" class="w-full py-3 px-4 rounded-xl border border-rose-200 text-rose-600 bg-rose-50/50 hover:bg-rose-100 font-semibold text-sm active:scale-[0.98] transition flex items-center justify-center gap-2">
+                <i data-lucide="x-circle" class="w-5 h-5"></i>
+                Mark Absent
+            </button>
+        </div>
+
+        <p class="text-[11px] text-slate-400 mt-6 leading-relaxed">
+            * Attendance status is synchronized in real-time with the Admin Ops dashboard.
+        </p>
+    </div>
+</div>
+
+</body>
+</html>
