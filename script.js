@@ -14,12 +14,9 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
-const storage = firebase.storage();   // 🔥 YEH LINE ADD KI;
+const storage = firebase.storage();
 
-// === SECTION 2: HELPER FUNCTIONS (getLocalDate) ===
-// ==========================================
-// HELPER: Get today's date in local timezone (YYYY-MM-DD)
-// ==========================================
+// === SECTION 2: HELPER FUNCTIONS ===
 function getLocalDate() {
     const now = new Date();
     const year = now.getFullYear();
@@ -29,9 +26,6 @@ function getLocalDate() {
 }
 
 // === SECTION 3: GLOBAL STATE ===
-// ==========================================
-// STATE
-// ==========================================
 let currentUser = null;
 let currentStatus = '';
 let selectedReason = '';
@@ -48,7 +42,12 @@ let isOcrScanning = false;
 let ocrAttemptCount = 0;
 let lastDetectedImei = '';
 
-// ========== 🔥 SPEC (RAM / STORAGE / NETWORK) STATE ==========
+// ========== 🪙 COIN SYSTEM (BACKEND-ONLY RATE) ==========
+// IMPORTANT: This value must NEVER be rendered in agent UI.
+// Used only to compute coin_total_value & actual_total_cost in Firebase.
+const COIN_VALUE = 12.50;
+
+// ========== SPEC (RAM / STORAGE / NETWORK) STATE ==========
 let selectedRam = '';
 let selectedStorage = '';
 let selectedNetwork = '';
@@ -283,13 +282,16 @@ function startUserExistenceCheck() {
             const blockedDate = data.blocked_date || '';
             if (blockedDate !== today) {
                 userRef.update({ is_blocked: false, blocked_date: null }).catch(() => {});
-                document.getElementById('blockedOverlay').style.display = 'none';
+                const overlay = document.getElementById('blockedOverlay');
+                if (overlay) overlay.style.display = 'none';
                 showToast('🔓 Auto-unblocked (new day)', 'info');
             } else {
-                document.getElementById('blockedOverlay').style.display = 'flex';
+                const overlay = document.getElementById('blockedOverlay');
+                if (overlay) overlay.style.display = 'flex';
             }
         } else {
-            document.getElementById('blockedOverlay').style.display = 'none';
+            const overlay = document.getElementById('blockedOverlay');
+            if (overlay) overlay.style.display = 'none';
         }
     });
     userListenerRef = userRef;
@@ -342,7 +344,8 @@ async function loginUser() {
             loadAttendanceHistory();
         } else {
             document.getElementById('attendanceTabBtn').style.display = 'none';
-            document.getElementById('blockedOverlay').style.display = 'none';
+            const bo = document.getElementById('blockedOverlay');
+            if (bo) bo.style.display = 'none';
         }
         loadTodayStats();
         loadPendingOrders();
@@ -360,8 +363,9 @@ function logoutUser() {
     currentUser = null;
     document.getElementById('mainApp').style.display = 'none';
     document.getElementById('authOverlay').style.display = 'flex';
-    document.getElementById('blockedOverlay').style.display = 'none';
-    hideMandatoryAttendanceModal();   // 🔥 NEW: modal bhi band karo
+    const bo = document.getElementById('blockedOverlay');
+    if (bo) bo.style.display = 'none';
+    hideMandatoryAttendanceModal();
     showToast('Logged out', 'info');
 }
 
@@ -385,7 +389,8 @@ function checkAuth() {
                         loadAttendanceHistory();
                     } else {
                         document.getElementById('attendanceTabBtn').style.display = 'none';
-                        document.getElementById('blockedOverlay').style.display = 'none';
+                        const bo = document.getElementById('blockedOverlay');
+                        if (bo) bo.style.display = 'none';
                     }
                     loadTodayStats();
                     loadPendingOrders();
@@ -451,8 +456,6 @@ function showChangePassword() {
 }
 
 // === SECTION 9: ATTENDANCE & SALARY SYSTEM ===
-// 🔥 NEW: checkAttendanceAndBlock() now controls the floating mandatory modal
-
 async function checkAttendanceAndBlock() {
     if (!currentUser) return;
     if (currentUser.role === 'admin') return;
@@ -461,12 +464,10 @@ async function checkAttendanceAndBlock() {
     const dateEl = document.getElementById('attendanceDateDisplay');
     if (dateEl) dateEl.textContent = today;
 
-    // 🔥 NEW: set date in floating modal too
     const floatingDateEl = document.getElementById('floatingAttDate');
     if (floatingDateEl) floatingDateEl.textContent = today;
 
     try {
-        // Auto unblock if yesterday's block
         const userSnap = await db.ref('users/' + currentUser.username).once('value');
         const userData = userSnap.val() || {};
         if (userData.is_blocked === true && userData.blocked_date !== today) {
@@ -483,35 +484,32 @@ async function checkAttendanceAndBlock() {
             const overlay = document.getElementById('blockedOverlay');
             if (overlay) overlay.style.display = 'flex';
             updateAttendanceUI('blocked');
-            hideMandatoryAttendanceModal();   // 🔥 NEW
+            hideMandatoryAttendanceModal();
             return;
         }
 
         const attSnap = await db.ref('attendance/' + currentUser.username + '/' + today).once('value');
         const att = attSnap.val();
 
-        // ✅ Already Present → hide modal, unlock
         if (att && att.status === 'present') {
             updateAttendanceUI('present');
-            hideMandatoryAttendanceModal();   // 🔥 NEW
+            hideMandatoryAttendanceModal();
             loadAttendanceHistory();
             loadAgentSalarySummary();
             return;
         }
 
-        // ❌ Already Absent → blocked overlay, hide modal
         if (att && att.status === 'absent' && att.blocked) {
             const overlay = document.getElementById('blockedOverlay');
             if (overlay) overlay.style.display = 'flex';
             updateAttendanceUI('blocked');
-            hideMandatoryAttendanceModal();   // 🔥 NEW
+            hideMandatoryAttendanceModal();
             loadAttendanceHistory();
             return;
         }
 
-        // ⚠️ NOT MARKED → show floating mandatory attendance modal
         updateAttendanceUI('unmarked');
-        showMandatoryAttendanceModal();       // 🔥 NEW
+        showMandatoryAttendanceModal();
         loadAttendanceHistory();
         loadAgentSalarySummary();
     } catch (e) {
@@ -558,7 +556,7 @@ async function openAttendanceOtpModal() {
     const attSnap = await db.ref('attendance/' + currentUser.username + '/' + today).once('value');
     if (attSnap.exists() && attSnap.val().status) {
         Swal.fire({ icon: 'info', title: 'Already Marked', text: 'Attendance is already recorded for today.' });
-        hideMandatoryAttendanceModal();   // 🔥 NEW
+        hideMandatoryAttendanceModal();
         return;
     }
 
@@ -620,7 +618,7 @@ async function openAttendanceOtpModal() {
 
         showToast('✅ Attendance marked Present!', 'success');
         updateAttendanceUI('present');
-        hideMandatoryAttendanceModal();   // 🔥 NEW: present hone pe modal band
+        hideMandatoryAttendanceModal();
         loadAttendanceHistory();
         loadAgentSalarySummary();
     } catch (e) {
@@ -664,7 +662,7 @@ async function handleMarkAbsent() {
         updateAttendanceUI('blocked');
         const overlay = document.getElementById('blockedOverlay');
         if (overlay) overlay.style.display = 'flex';
-        hideMandatoryAttendanceModal();   // 🔥 NEW
+        hideMandatoryAttendanceModal();
         loadAttendanceHistory();
     } catch (e) {
         console.error(e);
@@ -707,7 +705,6 @@ async function loadAttendanceHistory() {
     }
 }
 
-// Basic Salary Summary for Pickup Agents (Admin Controlled & Approved)
 async function loadAgentSalarySummary() {
     const approvedContent = document.getElementById('salaryApprovedContent');
     const pendingNotice = document.getElementById('salaryPendingNotice');
@@ -754,12 +751,8 @@ async function loadAgentSalarySummary() {
 }
 
 // ================================================================
-// 🔥 NEW SECTION 9.5: FLOATING MANDATORY ATTENDANCE MODAL
+// FLOATING MANDATORY ATTENDANCE MODAL
 // ================================================================
-// Login ke turant baad ye modal dikhta hai jab tak agent Present/Absent mark na kare.
-// HTML mein already `<div id="mandatoryAttendanceModal">` hai (class="hidden").
-// ================================================================
-
 function showMandatoryAttendanceModal() {
     const modal = document.getElementById('mandatoryAttendanceModal');
     const dateEl = document.getElementById('floatingAttDate');
@@ -773,23 +766,20 @@ function hideMandatoryAttendanceModal() {
     if (modal) modal.classList.add('hidden');
 }
 
-// "Mark Present" button click → opens existing OTP flow
 async function promptPresentFromFloating() {
     if (!currentUser) return;
     try {
-        await openAttendanceOtpModal();   // existing OTP-based present marking
+        await openAttendanceOtpModal();
     } catch (e) {
         console.error('Present flow error:', e);
     }
-    // Re-check: agar OTP verify hokar present mark hua toh modal auto-hide ho jayega
     await checkAttendanceAndBlock();
 }
 
-// "Mark Absent" button click → runs existing absent flow
 async function confirmAbsentFromFloating() {
     if (!currentUser) return;
     try {
-        await handleMarkAbsent();   // existing absent flow (reason prompt + block)
+        await handleMarkAbsent();
     } catch (e) {
         console.error('Absent flow error:', e);
     }
@@ -1052,12 +1042,25 @@ function showForm(status) {
                     <input type="number" id="value" placeholder="0" class="input-field w-full p-3.5 pl-8 rounded-xl outline-none font-bold text-lg" inputmode="numeric">
                 </div>
             </div>
+
+            <!-- 🪙 COINS INPUT (quantity only — rate/value never shown to agent) -->
+            <div>
+                <label class="text-xs font-bold text-gray-500 mb-1.5 block">COINS *</label>
+                <div class="relative">
+                    <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 font-bold">🪙</span>
+                    <input type="number" id="coins" placeholder="Enter coins quantity" class="input-field w-full p-3.5 pl-10 rounded-xl outline-none font-bold text-lg" inputmode="numeric" min="0" step="1">
+                </div>
+                <p class="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
+                    <span>ℹ️</span>
+                    <span>Enter the number of coins collected from customer.</span>
+                </p>
+            </div>
+
             <div>
                 <label class="text-xs font-bold text-gray-500 mb-1.5 block">CUSTOMER NAME <span class="text-gray-400">(Optional)</span></label>
                 <input type="text" id="custName" placeholder="Enter name" class="input-field w-full p-3.5 rounded-xl outline-none">
             </div>
 
-            <!-- 🔥 RAM / STORAGE / NETWORK — tap to select (compulsory) -->
             <div class="pt-2 border-t border-gray-100">
                 <p class="text-xs font-bold text-gray-500 mb-3 tracking-wide">⚙️ DEVICE SPECS <span class="text-red-500 font-bold">(Required)</span></p>
 
@@ -1081,7 +1084,6 @@ function showForm(status) {
                 <input type="hidden" id="networkType" value="">
             </div>
 
-            <!-- ============ DOCUMENTS (Bill + Aadhaar) ============ -->
             <div class="pt-2 border-t border-gray-100">
                 <p class="text-xs font-bold text-gray-500 mb-2 tracking-wide">📄 DOCUMENTS <span class="text-gray-400 font-medium">(All Optional)</span></p>
 
@@ -1235,15 +1237,37 @@ if (exists && existingData.status === 'rejected' && currentStatus === 'pickup') 
      const imei = document.getElementById('imei').value.trim();
      const value = document.getElementById('value').value.trim();
      const custName = document.getElementById('custName').value.trim();
+     const coinsRaw = (document.getElementById('coins')?.value || '').trim();
+
      if (!phoneModel || !imei || !value) {
          Swal.fire({ icon: 'error', title: 'Missing Details', text: 'Fill Model, IMEI, Value', confirmButtonColor: '#3b82f6' });
          return;
      }
+
+     // 🪙 Coins validation (quantity only)
+     if (coinsRaw === '' || isNaN(parseInt(coinsRaw)) || parseInt(coinsRaw) < 0) {
+         Swal.fire({ icon: 'error', title: 'Missing Coins', text: 'Please enter a valid coins quantity.', confirmButtonColor: '#3b82f6' });
+         const coinsInput = document.getElementById('coins');
+         if (coinsInput) coinsInput.focus();
+         return;
+     }
+     const coinsQty = parseInt(coinsRaw);
+
      dbData.phoneModel = phoneModel;
      dbData.imei = imei;
      if (hiddenImei2) dbData.imei2 = hiddenImei2;
      dbData.value = parseInt(value);
      dbData.customerName = custName || 'N/A';
+
+     // 🪙 COINS — backend-only calc (rate NEVER exposed to agent)
+     dbData.coins = coinsQty;
+     dbData.coinValueRate = COIN_VALUE;                         // stored for admin/audit
+     dbData.coinTotalValue = coinsQty * COIN_VALUE;             // ₹ value of coins
+     dbData.actualTotalCost = (parseInt(value) || 0) + (coinsQty * COIN_VALUE); // final actual cost
+
+     // ❌ NO COMMISSION FIELDS SET — Flipkart / Cashify commission does not apply on this pickup.
+     // (Admin panel tracks coins separately; agent earnings still come from pickup_incentive rules.)
+
      if (!selectedRam || !selectedStorage || !selectedNetwork) {
          const miss = [];
          if (!selectedRam) miss.push('RAM');
@@ -1311,6 +1335,8 @@ if (exists && existingData.status === 'rejected' && currentStatus === 'pickup') 
          dbData.aadhaarImage = aadhaarUrls[0];
          Swal.close();
      }
+
+     // 📱 WhatsApp message — NO coins, NO total cost (as required)
      whatsappMsg = `Order ID: ${orderId}\nStatus: Pickup Completed`;
  } else {
      const phoneModel = document.getElementById('phoneModelRejectReschedule').value.trim();
@@ -1385,13 +1411,77 @@ if (exists && existingData.status === 'rejected' && currentStatus === 'pickup') 
          await db.ref('pending/' + orderId).set(pendingData);
          await loadPendingOrders();
      }
+
+     // ================================================================
+     // 🔥 Cashify branding header + Pickup details card for the
+     //    WhatsApp confirmation dialog.
+     //    ⚠️ Coin ₹ value, per-coin rate, and total cost are HIDDEN.
+     // ================================================================
+     const cashifyHeaderHtml = `
+         <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #e0e7ff;">
+             <div style="width:28px;height:28px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#4f46e5,#7c3aed);box-shadow:0 4px 12px rgba(79,70,229,0.3);">
+                 <svg width="16" height="16" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                     <g stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+                         <path d="M22 18a14 14 0 0 1 20 0"/>
+                         <path d="M44 22l-2-4 -4 2"/>
+                         <path d="M42 46a14 14 0 0 1 -20 0"/>
+                         <path d="M20 42l2 4 4 -2"/>
+                     </g>
+                     <rect x="24" y="22" width="16" height="20" rx="3.5" fill="#ffffff"/>
+                 </svg>
+             </div>
+             <span style="font-size:18px;font-weight:900;letter-spacing:-0.5px;background:linear-gradient(135deg,#1e1b4b,#4f46e5 60%,#7c3aed);-webkit-background-clip:text;background-clip:text;color:transparent;">Cashify<span style="color:#22d3ee;-webkit-text-fill-color:#22d3ee;">.</span></span>
+         </div>
+     `;
+
+     let pickupInfoHtml = '';
+     if (currentStatus === 'pickup') {
+         // Only basic required info shown. Coins shown as quantity only.
+         pickupInfoHtml = `
+             <div style="text-align:left;background:linear-gradient(135deg,#eef2ff 0%,#e0e7ff 100%);border:1px solid #c7d2fe;border-radius:14px;padding:12px 14px;margin-bottom:12px;">
+                 <div style="font-size:10px;font-weight:900;color:#4338ca;letter-spacing:1.5px;margin-bottom:8px;">📦 PICKUP CONFIRMATION</div>
+                 <div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;border-bottom:1px dashed #c7d2fe;">
+                     <span style="color:#6b7280;font-weight:600;">Device</span>
+                     <span style="color:#111827;font-weight:800;text-align:right;">${dbData.phoneModel || '—'}</span>
+                 </div>
+                 <div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;border-bottom:1px dashed #c7d2fe;">
+                     <span style="color:#6b7280;font-weight:600;">IMEI</span>
+                     <span style="color:#111827;font-weight:700;font-family:ui-monospace,Menlo,monospace;font-size:11px;text-align:right;word-break:break-all;">${dbData.imei || '—'}</span>
+                 </div>
+                 <div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;border-bottom:1px dashed #c7d2fe;">
+                     <span style="color:#6b7280;font-weight:600;">RAM / Storage</span>
+                     <span style="color:#111827;font-weight:800;text-align:right;">${dbData.ramStorage || '—'}</span>
+                 </div>
+                 <div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;${dbData.customerName && dbData.customerName !== 'N/A' ? 'border-bottom:1px dashed #c7d2fe;' : ''}">
+                     <span style="color:#6b7280;font-weight:600;">Network</span>
+                     <span style="color:#111827;font-weight:800;text-align:right;">${dbData.networkType || '—'}</span>
+                 </div>
+                 ${dbData.customerName && dbData.customerName !== 'N/A' ? `
+                 <div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;border-bottom:1px dashed #c7d2fe;">
+                     <span style="color:#6b7280;font-weight:600;">Customer</span>
+                     <span style="color:#111827;font-weight:800;text-align:right;">${dbData.customerName}</span>
+                 </div>` : ''}
+                 <div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;border-bottom:1px dashed #c7d2fe;">
+                     <span style="color:#6b7280;font-weight:600;">Agreed Value</span>
+                     <span style="color:#047857;font-weight:900;font-size:14px;">₹${Number(dbData.value).toLocaleString('en-IN')}</span>
+                 </div>
+                 <div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:6px 0 2px;">
+                     <span style="color:#6b7280;font-weight:600;">Coins</span>
+                     <span style="color:#111827;font-weight:900;font-size:14px;">${dbData.coins} 🪙</span>
+                 </div>
+             </div>
+         `;
+     }
+
      const result = await Swal.fire({
          icon: 'success',
          title: '✅ Saved!',
          html: `
+             ${cashifyHeaderHtml}
+             ${pickupInfoHtml}
              <p class="text-sm text-gray-600 mb-2">📊 Firebase me time save ho gaya:</p>
              <div class="text-left bg-blue-50 p-2 rounded-lg text-xs font-mono mb-3">${istDateTime}</div>
-             <p class="text-sm text-gray-600 mb-2">📱 WhatsApp message (no time):</p>
+             <p class="text-sm text-gray-600 mb-2">📱 WhatsApp message preview:</p>
              <div class="text-left bg-gray-50 p-3 rounded-lg text-xs font-mono whitespace-pre-wrap">${whatsappMsg}</div>
          `,
          showCancelButton: true,

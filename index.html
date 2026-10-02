@@ -505,6 +505,56 @@
             display: none;
         }
 
+        /* ========================================================
+           🔥 NEW: CASHIFY LOGIN BRAND (Agent Panel)
+           ======================================================== */
+        .cashify-login-brand {
+            text-align: center;
+            margin-bottom: 22px;
+            animation: fadeIn 0.45s ease;
+        }
+        .cashify-login-logo {
+            width: 58px;
+            height: 58px;
+            margin: 0 auto 10px;
+            border-radius: 18px;
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 55%, #a855f7 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow:
+                0 12px 30px rgba(79,70,229,0.35),
+                inset 0 1px 0 rgba(255,255,255,0.3);
+        }
+        .cashify-login-logo svg {
+            width: 34px;
+            height: 34px;
+            filter: drop-shadow(0 3px 8px rgba(0,0,0,0.18));
+        }
+        .cashify-login-wordmark {
+            font-size: 28px;
+            font-weight: 900;
+            letter-spacing: -0.9px;
+            line-height: 1;
+            display: inline-block;
+            background: linear-gradient(135deg, #1e1b4b 0%, #4f46e5 60%, #7c3aed 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .cashify-login-wordmark .dot {
+            -webkit-text-fill-color: #22d3ee;
+            color: #22d3ee;
+        }
+        .cashify-login-tagline {
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: #94a3b8;
+            margin-top: 8px;
+        }
+
         /* User badge */
         .user-badge {
             display: flex;
@@ -540,6 +590,8 @@
             .auth-box { padding: 24px 18px; }
             .auth-box h2 { font-size: 20px; }
             .user-badge { font-size: 12px; gap: 4px; padding: 3px 8px; }
+            .cashify-login-wordmark { font-size: 26px; }
+            .cashify-login-logo { width: 54px; height: 54px; }
         }
 
         /* ----- NEW ATTENDANCE STYLES ----- */
@@ -653,7 +705,7 @@
         .spec-missing { font-size:12px; font-weight:700; color:#dc2626; margin-top:6px; }
 
         /* =========================================================
-           🔥 NEW: PREMIUM INTRO SPLASH — CASHIFY + OM SAI RAM COMM.
+           PREMIUM INTRO SPLASH — CASHIFY + OM SAI RAM COMM.
            ========================================================= */
         .splash-screen {
             position: fixed;
@@ -677,7 +729,6 @@
             pointer-events: none;
         }
 
-        /* Deep gradient layer + animated shimmer */
         .splash-bg {
             position: absolute;
             inset: 0;
@@ -699,7 +750,6 @@
             100% { transform: translateX(40%)  rotate(0deg); }
         }
 
-        /* Floating orbs */
         .splash-orb {
             position: absolute;
             border-radius: 50%;
@@ -745,7 +795,6 @@
             to   { opacity: 1; transform: translateY(0) scale(1); }
         }
 
-        /* Logo tile */
         .splash-logo {
             width: 118px;
             height: 118px;
@@ -789,7 +838,6 @@
             100% { opacity: 1; transform: scale(1) rotate(0); }
         }
 
-        /* Brand text — Cashify (hero) */
         .splash-brand {
             font-size: 44px;
             line-height: 1;
@@ -808,7 +856,6 @@
             -webkit-text-fill-color: #22d3ee;
         }
 
-        /* Divider */
         .splash-divider {
             display: flex;
             align-items: center;
@@ -832,7 +879,6 @@
             border-radius: 1.5px;
         }
 
-        /* Partner name — Om Sai Ram Communication */
         .splash-partner {
             font-size: 15px;
             font-weight: 800;
@@ -854,7 +900,6 @@
             animation: splashEnter 0.85s cubic-bezier(0.16, 1, 0.3, 1) 0.5s both;
         }
 
-        /* Loader dots */
         .splash-loader {
             display: flex;
             justify-content: center;
@@ -877,7 +922,6 @@
             30%           { transform: translateY(-10px); opacity: 1; }
         }
 
-        /* Small footer tag inside splash */
         .splash-footer {
             position: absolute;
             bottom: 22px;
@@ -897,7 +941,7 @@
 <!-- === SECTION 4: BODY START, OFFLINE BANNER & AUTH OVERLAY (LOGIN) === -->
 <body class="no-scrollbar">
 
-    <!-- 🔥 NEW: PREMIUM INTRO SPLASH — CASHIFY + OM SAI RAM COMMUNICATION -->
+    <!-- PREMIUM INTRO SPLASH — CASHIFY + OM SAI RAM COMMUNICATION -->
     <div id="splashScreen" class="splash-screen is-hidden" aria-hidden="true">
         <div class="splash-bg"></div>
         <div class="splash-orb splash-orb-1"></div>
@@ -913,7 +957,6 @@
                             <stop offset="100%" stop-color="#c7d2fe"/>
                         </linearGradient>
                     </defs>
-                    <!-- Recycle / refresh arrows around a phone = "Cashify" feel -->
                     <g fill="none" stroke="url(#cashifyGrad)" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M22 18a14 14 0 0 1 20 0"/>
                         <path d="M44 22l-2-4 -4 2"/>
@@ -950,12 +993,28 @@
         📡 Offline - Data will sync when back online
     </div>
 
-    <!-- ===== AUTH OVERLAY (Login Only) ===== -->
+    <!-- ===== AUTH OVERLAY (Login Only) — 🔥 CASHIFY branding added ===== -->
     <div id="authOverlay" class="auth-overlay">
         <div class="auth-box slide-up">
-            <div class="logo-icon">
-                <i data-lucide="package"></i>
+            <!-- Cashify brand header -->
+            <div class="cashify-login-brand">
+                <div class="cashify-login-logo">
+                    <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <g fill="none" stroke="#ffffff" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 18a14 14 0 0 1 20 0"/>
+                            <path d="M44 22l-2-4 -4 2"/>
+                            <path d="M42 46a14 14 0 0 1 -20 0"/>
+                            <path d="M20 42l2 4 4 -2"/>
+                        </g>
+                        <rect x="24" y="22" width="16" height="20" rx="3.5" fill="#ffffff"/>
+                        <circle cx="32" cy="39" r="1.6" fill="#4f46e5"/>
+                        <rect x="28" y="25.5" width="8" height="1.8" rx="0.9" fill="#4f46e5" opacity="0.7"/>
+                    </svg>
+                </div>
+                <div class="cashify-login-wordmark">Cashify<span class="dot">.</span></div>
+                <div class="cashify-login-tagline">Om Sai Ram Communication</div>
             </div>
+
             <h2>Welcome Back</h2>
             <p class="sub">Login to your agent account</p>
 
@@ -1011,7 +1070,6 @@
         <div class="px-4 py-5">
 
             <!-- === SECTION 6: TAB BAR NAVIGATION === -->
-            <!-- ===== TAB BAR: Pickup | Pending | Attendance ===== -->
             <div class="tab-bar mb-4" id="mainTabBar">
                 <button class="active" data-tab="pickup" onclick="switchTab('pickup')">
                     <i data-lucide="package-check"></i> Pickup
@@ -1020,19 +1078,15 @@
                     <i data-lucide="list-todo"></i> Pending
                     <span id="pendingCountBadgeMain" class="pending-badge">0</span>
                 </button>
-                <!-- 🔥 Added id="attendanceTabBtn" so admin can hide it -->
                 <button data-tab="attendance" id="attendanceTabBtn" onclick="switchTab('attendance')">
                     <i data-lucide="clipboard-check"></i> Attendance
                 </button>
             </div>
 
-            <!-- === SECTION 7: TAB CONTENT - PICKUP (Order ID, Status, Stats, Dynamic Form) === -->
-            <!-- ===== TAB: PICKUP ===== -->
+            <!-- === SECTION 7: TAB CONTENT - PICKUP === -->
             <div id="tab-pickup" class="tab-content">
-                <!-- STEP 1: Order ID + Status Selection -->
                 <div id="step-order" class="space-y-4 fade-in">
 
-                    <!-- Order ID Card -->
                     <div class="glass rounded-2xl p-5 shadow-xl">
                         <label class="flex items-center gap-2 text-sm font-bold text-gray-700 mb-3">
                             <i data-lucide="hash" class="w-4 h-4 text-blue-600"></i>
@@ -1048,7 +1102,6 @@
                         </div>
                     </div>
 
-                    <!-- Status Selection -->
                     <div class="glass rounded-2xl p-5 shadow-xl">
                         <label class="flex items-center gap-2 text-sm font-bold text-gray-700 mb-3">
                             <i data-lucide="list-checks" class="w-4 h-4 text-blue-600"></i>
@@ -1088,7 +1141,6 @@
                         </div>
                     </div>
 
-                    <!-- Today's Stats -->
                     <div class="glass rounded-2xl p-5 shadow-xl">
                         <div class="flex items-center justify-between mb-3">
                             <h3 class="text-sm font-bold text-gray-700 flex items-center gap-2">
@@ -1117,7 +1169,6 @@
                     </div>
                 </div>
 
-                <!-- STEP 2: Dynamic Form -->
                 <div id="step-form" class="hidden space-y-4 slide-up">
 
                     <button onclick="goBack()" class="btn-bounce flex items-center gap-2 text-blue-600 font-bold px-4 py-2 rounded-xl glass shadow">
@@ -1151,8 +1202,7 @@
                 </div>
             </div>
 
-            <!-- === SECTION 8: TAB CONTENT - PENDING ORDERS === -->
-            <!-- ===== TAB: PENDING ===== -->
+            <!-- === SECTION 8: TAB CONTENT - PENDING === -->
             <div id="tab-pending" class="tab-content" style="display:none;">
                 <div class="glass rounded-2xl p-5 shadow-xl">
                     <div class="flex items-center justify-between mb-3">
@@ -1167,7 +1217,6 @@
                         </button>
                     </div>
 
-                    <!-- Tab: All / On the way -->
                     <div class="tab-bar" id="pendingTabBar">
                         <button class="active" data-filter="all" onclick="setPendingFilter('all')">
                             <i data-lucide="list"></i> All
@@ -1188,7 +1237,6 @@
             </div>
 
             <!-- === SECTION 9: TAB CONTENT - ATTENDANCE === -->
-            <!-- ===== TAB: ATTENDANCE & SALARY ===== -->
     <div id="tab-attendance" class="tab-content" style="display:none;">
         <div class="glass rounded-2xl p-5 shadow-sm border border-gray-100 mb-4">
             <div class="flex items-center justify-between mb-3">
@@ -1201,7 +1249,6 @@
                 </div>
             </div>
 
-            <!-- Attendance Action Buttons -->
             <div id="attendanceActionGrid" class="grid grid-cols-2 gap-3 mt-3">
                 <button type="button" id="btnMarkPresent" onclick="openAttendanceOtpModal()" class="btn-bounce p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex flex-col items-center justify-center gap-1 hover:bg-emerald-100">
                     <span class="text-2xl">✅</span>
@@ -1220,7 +1267,6 @@
             </div>
         </div>
 
-        <!-- Basic Salary Summary Card (Admin Approved Only) -->
         <div id="salarySummaryCard" class="glass rounded-2xl p-5 shadow-sm border border-gray-100 mb-4">
             <div class="flex items-center justify-between mb-3 border-b border-gray-100 pb-2">
                 <h3 class="text-sm font-bold text-gray-800 flex items-center gap-2">
@@ -1249,7 +1295,6 @@
             </div>
         </div>
 
-        <!-- Attendance History (Last 7 Days) -->
         <div class="glass rounded-2xl p-5 shadow-sm border border-gray-100">
             <h3 class="text-sm font-bold text-gray-800 mb-3">Recent Attendance</h3>
             <div id="attendanceHistoryList" class="space-y-2 text-xs">
@@ -1259,7 +1304,6 @@
     </div>
 
     <!-- === SECTION 10: SCANNER MODAL (IMEI/OCR) === -->
-    <!-- Scanner Modal (unchanged) -->
     <div id="scannerModal" class="hidden fixed inset-0 scanner-overlay z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-3xl p-5 w-full max-w-sm shadow-2xl">
             <div class="flex items-center justify-between mb-3">
@@ -1272,7 +1316,6 @@
                 </button>
             </div>
 
-            <!-- Mode Toggle -->
             <div class="mode-toggle" id="scanModeToggle">
                 <button class="active" data-mode="barcode" onclick="setScanMode('barcode')">
                     <i data-lucide="barcode" class="w-3.5 h-3.5 inline mr-1"></i> Barcode
@@ -1300,17 +1343,14 @@
                 <span id="scanStatusText">Initializing camera...</span>
             </div>
 
-            <!-- OCR Progress -->
             <div class="ocr-progress" id="ocrProgress" style="display:none;">
                 <div class="bar" id="ocrProgressBar"></div>
             </div>
 
-            <!-- IMEI Result -->
             <div class="imei-result" id="imeiResult">
                 <span id="imeiResultText"></span>
             </div>
 
-            <!-- Capture Button (for OCR mode) -->
             <button class="btn-capture" id="captureBtn" onclick="startOCRScanning()" style="display:none;">
                 <i data-lucide="camera"></i>
                 Capture & Read IMEI
@@ -1333,7 +1373,7 @@
 
 
 <!-- ================================================================ -->
-<!-- MANDATORY ATTENDANCE FLOATING MODAL (Restores Present/Absent gate) -->
+<!-- MANDATORY ATTENDANCE FLOATING MODAL -->
 <!-- ================================================================ -->
 <div id="mandatoryAttendanceModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md hidden transition-all duration-300">
     <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6 text-center transform transition-all border border-slate-100">
@@ -1346,7 +1386,6 @@
             Please mark your attendance for <span id="floatingAttDate" class="font-bold text-slate-800"></span> before proceeding to your tasks.
         </p>
 
-        <!-- Attendance Action Buttons -->
         <div class="space-y-3">
             <button onclick="promptPresentFromFloating()" class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-[#0FA88B] to-[#12CAA7] text-white font-bold text-base shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 active:scale-[0.98] transition flex items-center justify-center gap-2">
                 <i data-lucide="check-circle-2" class="w-5 h-5"></i>
@@ -1365,15 +1404,14 @@
 </div>
 
 <!-- ================================================================ -->
-<!-- 🔥 PREMIUM SPLASH CONTROLLER — Cashify + Om Sai Ram Communication -->
-<!-- Har refresh par repeat nahi hoga — 5 min ka session cooldown.     -->
+<!-- PREMIUM SPLASH CONTROLLER — Cashify + Om Sai Ram Communication   -->
 <!-- ================================================================ -->
 <script>
     (function () {
         const SPLASH_KEY        = 'cashify_casper_splash_ts';
-        const SPLASH_COOLDOWN   = 5 * 60 * 1000;   // 5 minutes
-        const SPLASH_DURATION   = 1800;            // ~1.8 seconds visible
-        const FADE_OUT_MS       = 750;             // matches CSS transition
+        const SPLASH_COOLDOWN   = 5 * 60 * 1000;
+        const SPLASH_DURATION   = 1800;
+        const FADE_OUT_MS       = 750;
 
         function shouldShowSplash() {
             try {
@@ -1393,13 +1431,11 @@
                 return;
             }
 
-            // Mark timestamp immediately (rapid refresh won't re-show)
             try { sessionStorage.setItem(SPLASH_KEY, String(Date.now())); } catch (e) {}
 
             el.classList.remove('is-hidden', 'fade-out');
             el.setAttribute('aria-hidden', 'false');
 
-            // Restart CSS animations
             void el.offsetWidth;
 
             setTimeout(function () {
@@ -1412,8 +1448,6 @@
             }, SPLASH_DURATION);
         }
 
-        // Wrap showMainApp() so splash fires exactly once after
-        // login success OR auth-restore on reload.
         const _origShowMainApp = window.showMainApp;
         if (typeof _origShowMainApp === 'function') {
             window.showMainApp = function () {
