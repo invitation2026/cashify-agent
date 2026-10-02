@@ -69,7 +69,6 @@ function buildSpecChips(kind, options, extraClass) {
 }
 
 function selectSpec(kind, val, el) {
-    // toggle off if same chip tapped again
     const group = el.parentElement;
     const already = el.classList.contains('active');
     group.querySelectorAll('.spec-chip').forEach(b => b.classList.remove('active'));
@@ -111,16 +110,12 @@ function updateSpecUI() {
     `;
 }
 
-
 // ========== BILL / AADHAAR IMAGE STATE (Pickup) ==========
-// Multi-image support (max 3 per document)
 const PICKUP_MAX_IMAGES = 3;
-let pickupBillImages = [];      // array of compressed base64 dataURLs
-let pickupAadhaarImages = [];   // array of compressed base64 dataURLs
+let pickupBillImages = [];
+let pickupAadhaarImages = [];
 
-// === SECTION 4: IMAGE HANDLING (compress, render, pick, remove, clear) ===
-// 🔥 FIX: Compression optimized - max 800px, quality 0.55
-// Target ~20-50 KB per image instead of 150-300 KB
+// === SECTION 4: IMAGE HANDLING ===
 function compressImageFile(file, maxDim = 800, quality = 0.55) {
     return new Promise((resolve, reject) => {
         if (!file) return reject('No file');
@@ -215,10 +210,7 @@ function clearPickupImageState() {
     pickupAadhaarImages = [];
 }
 
-// === SECTION 5: REASONS (reject and reschedule) ===
-// ==========================================
-// REASONS
-// ==========================================
+// === SECTION 5: REASONS ===
 function selectReason(el, text) {
     selectedReason = text || '';
     document.querySelectorAll('.reason-btn').forEach(btn => btn.classList.remove('active'));
@@ -258,10 +250,7 @@ const rescheduleReasons = [
     { text: 'Other reason', icon: 'more-horizontal' }
 ];
 
-// === SECTION 6: USER LISTENER (real-time existence & auto-unblock) ===
-// ==========================================
-// USER LISTENER (Real-time – delete/force logout + auto-unblock)
-// ==========================================
+// === SECTION 6: USER LISTENER ===
 let userListenerRef = null;
 
 function startUserExistenceCheck() {
@@ -276,7 +265,6 @@ function startUserExistenceCheck() {
         }
         const data = snapshot.val();
         
-        // 🔥 NEW: Check if account is deactivated (left by admin)
         if (data.is_active === false) {
             logoutUser();
             showToast('🔒 Your account has been deactivated (employee left).', 'error');
@@ -290,9 +278,8 @@ function startUserExistenceCheck() {
             return;
         }
         
-        // Check if blocked – auto-unblock if date mismatch
         if (data.is_blocked === true && data.role !== 'admin') {
-            const today = getLocalDate();  // 🔥 Local date
+            const today = getLocalDate();
             const blockedDate = data.blocked_date || '';
             if (blockedDate !== today) {
                 userRef.update({ is_blocked: false, blocked_date: null }).catch(() => {});
@@ -315,9 +302,7 @@ function stopUserExistenceCheck() {
     }
 }
 
-// ================================================================
-// SECTION 7: AUTHENTICATION FUNCTIONS
-// ================================================================
+// === SECTION 7: AUTHENTICATION ===
 async function loginUser() {
     const username = document.getElementById('loginUsername').value.trim().toLowerCase();
     const password = document.getElementById('loginPassword').value.trim();
@@ -343,7 +328,6 @@ async function loginUser() {
             errorEl.style.display = 'block';
             return;
         }
-        // 🔥 NEW: Check if account is active
         if (userData.is_active === false) {
             errorEl.textContent = '❌ Account disabled (employee left). Contact admin.';
             errorEl.style.display = 'block';
@@ -377,6 +361,7 @@ function logoutUser() {
     document.getElementById('mainApp').style.display = 'none';
     document.getElementById('authOverlay').style.display = 'flex';
     document.getElementById('blockedOverlay').style.display = 'none';
+    hideMandatoryAttendanceModal();   // 🔥 NEW: modal bhi band karo
     showToast('Logged out', 'info');
 }
 
@@ -387,7 +372,6 @@ function checkAuth() {
             currentUser = JSON.parse(stored);
             verifyUserExists(currentUser.username).then(async exists => {
                 if (exists) {
-                    // 🔥 NEW: Check if account is still active
                     const userSnap = await db.ref('users/' + currentUser.username).once('value');
                     const userData = userSnap.val();
                     if (userData && userData.is_active === false) {
@@ -433,9 +417,6 @@ function showMainApp() {
 }
 
 // === SECTION 8: CHANGE PASSWORD ===
-// ==========================================
-// CHANGE PASSWORD
-// ==========================================
 function showChangePassword() {
     if (!currentUser) return;
     Swal.fire({
@@ -470,9 +451,7 @@ function showChangePassword() {
 }
 
 // === SECTION 9: ATTENDANCE & SALARY SYSTEM ===
-// ==========================================
-// CLEAN ATTENDANCE LOGIC (Extracted & Integrated)
-// ==========================================
+// 🔥 NEW: checkAttendanceAndBlock() now controls the floating mandatory modal
 
 async function checkAttendanceAndBlock() {
     if (!currentUser) return;
@@ -481,6 +460,10 @@ async function checkAttendanceAndBlock() {
     const today = getLocalDate();
     const dateEl = document.getElementById('attendanceDateDisplay');
     if (dateEl) dateEl.textContent = today;
+
+    // 🔥 NEW: set date in floating modal too
+    const floatingDateEl = document.getElementById('floatingAttDate');
+    if (floatingDateEl) floatingDateEl.textContent = today;
 
     try {
         // Auto unblock if yesterday's block
@@ -500,28 +483,35 @@ async function checkAttendanceAndBlock() {
             const overlay = document.getElementById('blockedOverlay');
             if (overlay) overlay.style.display = 'flex';
             updateAttendanceUI('blocked');
+            hideMandatoryAttendanceModal();   // 🔥 NEW
             return;
         }
 
         const attSnap = await db.ref('attendance/' + currentUser.username + '/' + today).once('value');
         const att = attSnap.val();
 
+        // ✅ Already Present → hide modal, unlock
         if (att && att.status === 'present') {
             updateAttendanceUI('present');
+            hideMandatoryAttendanceModal();   // 🔥 NEW
             loadAttendanceHistory();
             loadAgentSalarySummary();
             return;
         }
 
+        // ❌ Already Absent → blocked overlay, hide modal
         if (att && att.status === 'absent' && att.blocked) {
             const overlay = document.getElementById('blockedOverlay');
             if (overlay) overlay.style.display = 'flex';
             updateAttendanceUI('blocked');
+            hideMandatoryAttendanceModal();   // 🔥 NEW
             loadAttendanceHistory();
             return;
         }
 
+        // ⚠️ NOT MARKED → show floating mandatory attendance modal
         updateAttendanceUI('unmarked');
+        showMandatoryAttendanceModal();       // 🔥 NEW
         loadAttendanceHistory();
         loadAgentSalarySummary();
     } catch (e) {
@@ -568,6 +558,7 @@ async function openAttendanceOtpModal() {
     const attSnap = await db.ref('attendance/' + currentUser.username + '/' + today).once('value');
     if (attSnap.exists() && attSnap.val().status) {
         Swal.fire({ icon: 'info', title: 'Already Marked', text: 'Attendance is already recorded for today.' });
+        hideMandatoryAttendanceModal();   // 🔥 NEW
         return;
     }
 
@@ -593,7 +584,6 @@ async function openAttendanceOtpModal() {
     }
 
     try {
-        // Check OTP in daily_otp (Cashify structure) or otp/{agentId}
         let otpData = null;
         const dailySnap = await db.ref('daily_otp/' + today + '/' + currentUser.username).once('value');
         if (dailySnap.exists()) {
@@ -622,7 +612,6 @@ async function openAttendanceOtpModal() {
             marked_by: 'agent_otp'
         });
 
-        // Mark OTP as used if supported
         if (dailySnap.exists()) {
             await db.ref('daily_otp/' + today + '/' + currentUser.username + '/used').set(true);
         } else {
@@ -631,6 +620,7 @@ async function openAttendanceOtpModal() {
 
         showToast('✅ Attendance marked Present!', 'success');
         updateAttendanceUI('present');
+        hideMandatoryAttendanceModal();   // 🔥 NEW: present hone pe modal band
         loadAttendanceHistory();
         loadAgentSalarySummary();
     } catch (e) {
@@ -674,6 +664,7 @@ async function handleMarkAbsent() {
         updateAttendanceUI('blocked');
         const overlay = document.getElementById('blockedOverlay');
         if (overlay) overlay.style.display = 'flex';
+        hideMandatoryAttendanceModal();   // 🔥 NEW
         loadAttendanceHistory();
     } catch (e) {
         console.error(e);
@@ -762,11 +753,51 @@ async function loadAgentSalarySummary() {
     }
 }
 
+// ================================================================
+// 🔥 NEW SECTION 9.5: FLOATING MANDATORY ATTENDANCE MODAL
+// ================================================================
+// Login ke turant baad ye modal dikhta hai jab tak agent Present/Absent mark na kare.
+// HTML mein already `<div id="mandatoryAttendanceModal">` hai (class="hidden").
+// ================================================================
+
+function showMandatoryAttendanceModal() {
+    const modal = document.getElementById('mandatoryAttendanceModal');
+    const dateEl = document.getElementById('floatingAttDate');
+    if (dateEl) dateEl.textContent = getLocalDate();
+    if (modal) modal.classList.remove('hidden');
+    if (window.lucide) { try { lucide.createIcons(); } catch(_){} }
+}
+
+function hideMandatoryAttendanceModal() {
+    const modal = document.getElementById('mandatoryAttendanceModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+// "Mark Present" button click → opens existing OTP flow
+async function promptPresentFromFloating() {
+    if (!currentUser) return;
+    try {
+        await openAttendanceOtpModal();   // existing OTP-based present marking
+    } catch (e) {
+        console.error('Present flow error:', e);
+    }
+    // Re-check: agar OTP verify hokar present mark hua toh modal auto-hide ho jayega
+    await checkAttendanceAndBlock();
+}
+
+// "Mark Absent" button click → runs existing absent flow
+async function confirmAbsentFromFloating() {
+    if (!currentUser) return;
+    try {
+        await handleMarkAbsent();   // existing absent flow (reason prompt + block)
+    } catch (e) {
+        console.error('Absent flow error:', e);
+    }
+    hideMandatoryAttendanceModal();
+    await checkAttendanceAndBlock();
+}
 
 // === SECTION 10: TAB SWITCHING ===
-// ==========================================
-// TAB SWITCHING
-// ==========================================
 function switchTab(tab) {
     document.querySelectorAll('#mainTabBar button').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.tab === tab);
@@ -778,9 +809,6 @@ function switchTab(tab) {
 }
 
 // === SECTION 11: OFFLINE DETECTION ===
-// ==========================================
-// OFFLINE DETECTION
-// ==========================================
 function setupOfflineDetection() {
     const updateStatus = () => {
         const isOnline = navigator.onLine;
@@ -800,9 +828,6 @@ function setupOfflineDetection() {
 }
 
 // === SECTION 12: TODAY'S STATS ===
-// ==========================================
-// TODAY'S STATS
-// ==========================================
 async function loadTodayStats() {
     if (!currentUser) return;
     try {
@@ -824,9 +849,6 @@ async function loadTodayStats() {
 }
 
 // === SECTION 13: PENDING ORDERS ===
-// ==========================================
-// PENDING ORDERS
-// ==========================================
 async function loadPendingOrders() {
     if (!currentUser) return;
     try {
@@ -919,9 +941,6 @@ function markPendingDone(orderId) {
 }
 
 // === SECTION 14: PASTE ORDER ID ===
-// ==========================================
-// PASTE ORDER ID
-// ==========================================
 async function pasteOrderId() {
     try {
         const text = await navigator.clipboard.readText();
@@ -932,10 +951,7 @@ async function pasteOrderId() {
     }
 }
 
-// === SECTION 15: SHOW FORM (dynamic form generation) ===
-// ==========================================
-// SHOW FORM
-// ==========================================
+// === SECTION 15: SHOW FORM ===
 let backNavigationReady = false;
 
 function setupBackNavigation() {
@@ -1148,10 +1164,7 @@ function showForm(status) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-/// === SECTION 16: SUBMIT DATA ===
-// ==========================================
-// SUBMIT DATA
-// ==========================================
+// === SECTION 16: SUBMIT DATA ===
 async function submitData() {
 if (!currentUser) {
 showToast('Please login first', 'error');
@@ -1254,7 +1267,6 @@ if (exists && existingData.status === 'rejected' && currentStatus === 'pickup') 
      const _aadNo  = (document.getElementById('aadhaarNumber')?.value || '').trim();
      if (_billNo) dbData.billNumber = _billNo;
      if (_aadNo)  dbData.aadhaarNumber = _aadNo;
-     // 🔥🔥🔥 MAIN FIX: Upload images to Firebase Storage, store only URLs in DB
      if (pickupBillImages.length) {
          Swal.fire({ title: 'Uploading Bill Images...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
          const billUrls = [];
@@ -1321,7 +1333,6 @@ if (exists && existingData.status === 'rejected' && currentStatus === 'pickup') 
      }
      dbData.reason = reason;
      
-     // 🔥 UPDATED: WhatsApp Message Format for Reject & Reschedule
      if (currentStatus === 'rejected') {
          whatsappMsg = `Order ID: ${orderId}\nModel: ${dbData.phoneModel}\nReason: ${dbData.reason}\nStatus: Rejected`;
          dbData.incentive_approved = false;
@@ -1418,9 +1429,6 @@ if (exists && existingData.status === 'rejected' && currentStatus === 'pickup') 
 }
 
 // === SECTION 17: SCANNER FUNCTIONS (Barcode + OCR) ===
-// ==========================================
-// SCANNER FUNCTIONS (Barcode + OCR)
-// ==========================================
 function setScanMode(mode) {
     scanMode = mode;
     document.querySelectorAll('#scanModeToggle button').forEach(b => {
@@ -1760,9 +1768,6 @@ function stopScanner() {
 }
 
 // === SECTION 18: TOAST ===
-// ==========================================
-// TOAST
-// ==========================================
 function showToast(message, type = 'info') {
     const colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500' };
     const toast = document.createElement('div');
@@ -1777,9 +1782,6 @@ function showToast(message, type = 'info') {
 }
 
 // === SECTION 19: IST DATE/TIME FORMATTER ===
-// ==========================================
-// GET IST DATE/TIME
-// ==========================================
 function getISTDateTime() {
     const now = new Date();
     const istOffset = 5.5 * 60 * 60 * 1000;
@@ -1797,10 +1799,7 @@ function getISTDateTime() {
     return `${dd}-${mmm}-${yyyy}, ${hh}:${minutes}:${seconds} ${ampm} IST`;
 }
 
-// === SECTION 20: INITIALIZATION (DOMContentLoaded) ===
-// ==========================================
-// INIT
-// ==========================================
+// === SECTION 20: INITIALIZATION ===
 document.addEventListener('DOMContentLoaded', () => {
     setupBackNavigation();
 
