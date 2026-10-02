@@ -651,11 +651,299 @@
         .spec-summary.ok { border-style:solid; border-color:#22c55e; background:#f0fdf4; }
         .spec-summary.ok .body { color:#15803d; }
         .spec-missing { font-size:12px; font-weight:700; color:#dc2626; margin-top:6px; }
+
+        /* =========================================================
+           🔥 NEW: PREMIUM INTRO SPLASH — CASHIFY + OM SAI RAM COMM.
+           ========================================================= */
+        .splash-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 9997;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #0b1020;
+            overflow: hidden;
+            opacity: 1;
+            transition: opacity 0.75s cubic-bezier(0.4, 0, 0.2, 1),
+                        transform 0.75s cubic-bezier(0.4, 0, 0.2, 1),
+                        visibility 0.75s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .splash-screen.is-hidden { display: none; }
+        .splash-screen.fade-out {
+            opacity: 0;
+            visibility: hidden;
+            transform: scale(1.05);
+            pointer-events: none;
+        }
+
+        /* Deep gradient layer + animated shimmer */
+        .splash-bg {
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(circle at 20% 15%, rgba(99,102,241,0.45), transparent 55%),
+                radial-gradient(circle at 85% 85%, rgba(168,85,247,0.40), transparent 55%),
+                radial-gradient(circle at 50% 50%, rgba(59,130,246,0.25), transparent 70%),
+                linear-gradient(135deg, #0b1020 0%, #131a35 45%, #1a1247 100%);
+        }
+        .splash-bg::after {
+            content: '';
+            position: absolute;
+            inset: -50%;
+            background: linear-gradient(115deg, transparent 40%, rgba(255,255,255,0.06) 50%, transparent 60%);
+            animation: shimmerSweep 3.2s ease-in-out infinite;
+        }
+        @keyframes shimmerSweep {
+            0%   { transform: translateX(-40%) rotate(0deg); }
+            100% { transform: translateX(40%)  rotate(0deg); }
+        }
+
+        /* Floating orbs */
+        .splash-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(70px);
+            opacity: 0.55;
+            pointer-events: none;
+        }
+        .splash-orb-1 {
+            width: 340px; height: 340px;
+            background: #6366f1;
+            top: -120px; left: -120px;
+            animation: orbFloat 7s ease-in-out infinite;
+        }
+        .splash-orb-2 {
+            width: 280px; height: 280px;
+            background: #a855f7;
+            bottom: -100px; right: -100px;
+            animation: orbFloat 8s ease-in-out infinite reverse;
+        }
+        .splash-orb-3 {
+            width: 200px; height: 200px;
+            background: #22d3ee;
+            top: 55%; left: -80px;
+            opacity: 0.35;
+            animation: orbFloat 9s ease-in-out infinite;
+        }
+        @keyframes orbFloat {
+            0%, 100% { transform: translate(0, 0); }
+            50%      { transform: translate(26px, 30px); }
+        }
+
+        .splash-content {
+            position: relative;
+            z-index: 2;
+            padding: 24px;
+            text-align: center;
+            max-width: 420px;
+            width: 100%;
+            animation: splashEnter 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+        @keyframes splashEnter {
+            from { opacity: 0; transform: translateY(26px) scale(0.95); }
+            to   { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        /* Logo tile */
+        .splash-logo {
+            width: 118px;
+            height: 118px;
+            margin: 0 auto 22px;
+            border-radius: 34px;
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 55%, #a855f7 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            box-shadow:
+                0 24px 60px rgba(79,70,229,0.55),
+                0 0 0 1px rgba(255,255,255,0.14) inset,
+                0 -20px 40px rgba(168,85,247,0.35) inset;
+            animation: logoPop 1s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+        }
+        .splash-logo::before {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: 38px;
+            background: linear-gradient(135deg, #6366f1, #a855f7, #22d3ee, #6366f1);
+            background-size: 300% 300%;
+            z-index: -1;
+            filter: blur(14px);
+            opacity: 0.75;
+            animation: gradientSpin 4s linear infinite;
+        }
+        @keyframes gradientSpin {
+            0%   { background-position: 0% 50%; }
+            100% { background-position: 300% 50%; }
+        }
+        .splash-logo svg {
+            width: 74px;
+            height: 74px;
+            filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.28));
+        }
+        @keyframes logoPop {
+            0%   { opacity: 0; transform: scale(0.55) rotate(-6deg); }
+            60%  { opacity: 1; transform: scale(1.06) rotate(2deg); }
+            100% { opacity: 1; transform: scale(1) rotate(0); }
+        }
+
+        /* Brand text — Cashify (hero) */
+        .splash-brand {
+            font-size: 44px;
+            line-height: 1;
+            font-weight: 900;
+            letter-spacing: -1.2px;
+            margin: 0;
+            background: linear-gradient(180deg, #ffffff 0%, #dbeafe 55%, #a5b4fc 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            text-shadow: 0 8px 30px rgba(99,102,241,0.45);
+            animation: splashEnter 0.85s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
+        }
+        .splash-brand .dot {
+            color: #22d3ee;
+            -webkit-text-fill-color: #22d3ee;
+        }
+
+        /* Divider */
+        .splash-divider {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin: 16px auto 14px;
+            width: 70%;
+            animation: splashEnter 0.85s cubic-bezier(0.16, 1, 0.3, 1) 0.28s both;
+        }
+        .splash-divider .line {
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.45), transparent);
+        }
+        .splash-divider .diamond {
+            width: 7px;
+            height: 7px;
+            background: #22d3ee;
+            transform: rotate(45deg);
+            box-shadow: 0 0 14px rgba(34,211,238,0.85);
+            border-radius: 1.5px;
+        }
+
+        /* Partner name — Om Sai Ram Communication */
+        .splash-partner {
+            font-size: 15px;
+            font-weight: 800;
+            letter-spacing: 3.4px;
+            text-transform: uppercase;
+            color: #e0e7ff;
+            margin: 0;
+            text-shadow: 0 4px 18px rgba(0,0,0,0.35);
+            animation: splashEnter 0.85s cubic-bezier(0.16, 1, 0.3, 1) 0.4s both;
+        }
+        .splash-partner-sub {
+            display: block;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.55);
+            margin-top: 8px;
+            animation: splashEnter 0.85s cubic-bezier(0.16, 1, 0.3, 1) 0.5s both;
+        }
+
+        /* Loader dots */
+        .splash-loader {
+            display: flex;
+            justify-content: center;
+            gap: 9px;
+            margin-top: 38px;
+            animation: splashEnter 0.85s cubic-bezier(0.16, 1, 0.3, 1) 0.6s both;
+        }
+        .splash-loader span {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: linear-gradient(180deg, #ffffff, #a5b4fc);
+            box-shadow: 0 0 10px rgba(165,180,252,0.7);
+            animation: dotBounce 1.4s ease-in-out infinite;
+        }
+        .splash-loader span:nth-child(2) { animation-delay: 0.15s; }
+        .splash-loader span:nth-child(3) { animation-delay: 0.3s; }
+        @keyframes dotBounce {
+            0%, 60%, 100% { transform: translateY(0);    opacity: 0.45; }
+            30%           { transform: translateY(-10px); opacity: 1; }
+        }
+
+        /* Small footer tag inside splash */
+        .splash-footer {
+            position: absolute;
+            bottom: 22px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 3px;
+            color: rgba(255,255,255,0.35);
+            text-transform: uppercase;
+            animation: splashEnter 0.85s cubic-bezier(0.16, 1, 0.3, 1) 0.7s both;
+        }
     </style>
 </head>
 
 <!-- === SECTION 4: BODY START, OFFLINE BANNER & AUTH OVERLAY (LOGIN) === -->
 <body class="no-scrollbar">
+
+    <!-- 🔥 NEW: PREMIUM INTRO SPLASH — CASHIFY + OM SAI RAM COMMUNICATION -->
+    <div id="splashScreen" class="splash-screen is-hidden" aria-hidden="true">
+        <div class="splash-bg"></div>
+        <div class="splash-orb splash-orb-1"></div>
+        <div class="splash-orb splash-orb-2"></div>
+        <div class="splash-orb splash-orb-3"></div>
+
+        <div class="splash-content">
+            <div class="splash-logo">
+                <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <defs>
+                        <linearGradient id="cashifyGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#ffffff"/>
+                            <stop offset="100%" stop-color="#c7d2fe"/>
+                        </linearGradient>
+                    </defs>
+                    <!-- Recycle / refresh arrows around a phone = "Cashify" feel -->
+                    <g fill="none" stroke="url(#cashifyGrad)" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 18a14 14 0 0 1 20 0"/>
+                        <path d="M44 22l-2-4 -4 2"/>
+                        <path d="M42 46a14 14 0 0 1 -20 0"/>
+                        <path d="M20 42l2 4 4 -2"/>
+                    </g>
+                    <rect x="24" y="22" width="16" height="20" rx="3.5" fill="url(#cashifyGrad)"/>
+                    <circle cx="32" cy="39" r="1.6" fill="#4f46e5"/>
+                    <rect x="28" y="25.5" width="8" height="1.8" rx="0.9" fill="#4f46e5" opacity="0.7"/>
+                </svg>
+            </div>
+
+            <h1 class="splash-brand">Cashify<span class="dot">.</span></h1>
+
+            <div class="splash-divider">
+                <span class="line"></span>
+                <span class="diamond"></span>
+                <span class="line"></span>
+            </div>
+
+            <p class="splash-partner">Om Sai Ram Communication</p>
+            <span class="splash-partner-sub">Pickup Partner</span>
+
+            <div class="splash-loader">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+
+        <div class="splash-footer">Loading Experience</div>
+    </div>
 
     <!-- Offline Banner -->
     <div id="offlineBanner" class="bg-red-500 text-white text-center py-2 text-sm font-semibold hidden">
@@ -1075,6 +1363,73 @@
         </p>
     </div>
 </div>
+
+<!-- ================================================================ -->
+<!-- 🔥 PREMIUM SPLASH CONTROLLER — Cashify + Om Sai Ram Communication -->
+<!-- Har refresh par repeat nahi hoga — 5 min ka session cooldown.     -->
+<!-- ================================================================ -->
+<script>
+    (function () {
+        const SPLASH_KEY        = 'cashify_casper_splash_ts';
+        const SPLASH_COOLDOWN   = 5 * 60 * 1000;   // 5 minutes
+        const SPLASH_DURATION   = 1800;            // ~1.8 seconds visible
+        const FADE_OUT_MS       = 750;             // matches CSS transition
+
+        function shouldShowSplash() {
+            try {
+                const last = parseInt(sessionStorage.getItem(SPLASH_KEY) || '0', 10);
+                return (Date.now() - last) > SPLASH_COOLDOWN;
+            } catch (e) {
+                return true;
+            }
+        }
+
+        function triggerSplash() {
+            const el = document.getElementById('splashScreen');
+            if (!el) return;
+
+            if (!shouldShowSplash()) {
+                el.classList.add('is-hidden');
+                return;
+            }
+
+            // Mark timestamp immediately (rapid refresh won't re-show)
+            try { sessionStorage.setItem(SPLASH_KEY, String(Date.now())); } catch (e) {}
+
+            el.classList.remove('is-hidden', 'fade-out');
+            el.setAttribute('aria-hidden', 'false');
+
+            // Restart CSS animations
+            void el.offsetWidth;
+
+            setTimeout(function () {
+                el.classList.add('fade-out');
+                el.setAttribute('aria-hidden', 'true');
+                setTimeout(function () {
+                    el.classList.add('is-hidden');
+                    el.classList.remove('fade-out');
+                }, FADE_OUT_MS);
+            }, SPLASH_DURATION);
+        }
+
+        // Wrap showMainApp() so splash fires exactly once after
+        // login success OR auth-restore on reload.
+        const _origShowMainApp = window.showMainApp;
+        if (typeof _origShowMainApp === 'function') {
+            window.showMainApp = function () {
+                _origShowMainApp.apply(this, arguments);
+                setTimeout(triggerSplash, 80);
+            };
+        } else {
+            window.addEventListener('load', function () {
+                const mainApp = document.getElementById('mainApp');
+                if (mainApp && mainApp.style.display !== 'none') {
+                    setTimeout(triggerSplash, 200);
+                }
+            });
+        }
+    })();
+</script>
 
 </body>
 </html>
