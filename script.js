@@ -1,7 +1,4 @@
 // === SECTION 1: FIREBASE CONFIG ===
-// ==========================================
-// FIREBASE CONFIG
-// ==========================================
 const firebaseConfig = {
   apiKey: "AIzaSyD1XNPVJfKzPoNgxo5R33zxOCebH2H613w",
   authDomain: "cashify-1cea1.firebaseapp.com",
@@ -43,8 +40,6 @@ let ocrAttemptCount = 0;
 let lastDetectedImei = '';
 
 // ========== 🪙 COIN SYSTEM (BACKEND-ONLY RATE) ==========
-// IMPORTANT: This value must NEVER be rendered in agent UI.
-// Used only to compute coin_total_value & actual_total_cost in Firebase.
 const COIN_VALUE = 12.50;
 
 // ========== SPEC (RAM / STORAGE / NETWORK) STATE ==========
@@ -53,7 +48,8 @@ let selectedStorage = '';
 let selectedNetwork = '';
 const RAM_OPTIONS = ['1GB','2GB','3GB','4GB','6GB','8GB','12GB','16GB','18GB','24GB'];
 const STORAGE_OPTIONS = ['8GB','16GB','32GB','64GB','128GB','256GB','512GB','1TB','2TB'];
-const NETWORK_OPTIONS = ['2G','3G','4G','5G'];
+// 🔥 Updated: includes 1G
+const NETWORK_OPTIONS = ['1G','2G','3G','4G','5G'];
 
 function resetSpecSelection() {
     selectedRam = '';
@@ -87,13 +83,11 @@ function updateSpecUI() {
     if (ramPick) { ramPick.textContent = selectedRam || 'Not selected'; ramPick.className = 'picked' + (selectedRam ? '' : ' empty'); }
     if (stoPick) { stoPick.textContent = selectedStorage || 'Not selected'; stoPick.className = 'picked' + (selectedStorage ? '' : ' empty'); }
     if (netPick) { netPick.textContent = selectedNetwork || 'Not selected'; netPick.className = 'picked' + (selectedNetwork ? '' : ' empty'); }
-
     const ramStorageInput = document.getElementById('ramStorage');
     const networkInput = document.getElementById('networkType');
     const combo = (selectedRam && selectedStorage) ? (selectedRam + '/' + selectedStorage) : '';
     if (ramStorageInput) ramStorageInput.value = combo;
     if (networkInput) networkInput.value = selectedNetwork;
-
     const box = document.getElementById('specSummary');
     if (!box) return;
     const done = selectedRam && selectedStorage && selectedNetwork;
@@ -109,7 +103,7 @@ function updateSpecUI() {
     `;
 }
 
-// ========== BILL / AADHAAR IMAGE STATE (Pickup) ==========
+// ========== BILL / AADHAAR IMAGE STATE ==========
 const PICKUP_MAX_IMAGES = 3;
 let pickupBillImages = [];
 let pickupAadhaarImages = [];
@@ -132,16 +126,11 @@ function compressImageFile(file, maxDim = 800, quality = 0.55) {
                     if (height > maxDim) { width = Math.round(width * maxDim / height); height = maxDim; }
                 }
                 const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
+                canvas.width = width; canvas.height = height;
                 const ctx = canvas.getContext('2d');
-                ctx.fillStyle = '#fff';
-                ctx.fillRect(0, 0, width, height);
+                ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, width, height);
                 ctx.drawImage(img, 0, 0, width, height);
-                try {
-                    const dataUrl = canvas.toDataURL('image/jpeg', quality);
-                    resolve(dataUrl);
-                } catch (e) { reject(e); }
+                try { resolve(canvas.toDataURL('image/jpeg', quality)); } catch (e) { reject(e); }
             };
             img.src = reader.result;
         };
@@ -161,8 +150,7 @@ function renderPickupImgList(which) {
     }
     let totalKB = 0;
     previewEl.innerHTML = `<div class="grid grid-cols-3 gap-2">` + arr.map((d, i) => {
-        const kb = Math.round((d.length * 3 / 4) / 1024);
-        totalKB += kb;
+        const kb = Math.round((d.length * 3 / 4) / 1024); totalKB += kb;
         return `<div class="relative group">
             <img src="${d}" class="w-full h-20 object-cover rounded-lg border border-gray-200" alt="p${i}">
             <button type="button" onclick="removePickupImage('${which}',${i})" class="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-red-600 text-white text-xs font-bold shadow-md">✕</button>
@@ -179,20 +167,14 @@ async function handlePickupImagePick(inputEl, which) {
     const infoEl = document.getElementById(which === 'bill' ? 'billImgInfo' : 'aadhaarImgInfo');
     if (arr.length >= PICKUP_MAX_IMAGES) {
         showToast(`Max ${PICKUP_MAX_IMAGES} images allowed`, 'error');
-        inputEl.value = '';
-        return;
+        inputEl.value = ''; return;
     }
     const room = PICKUP_MAX_IMAGES - arr.length;
     const toProcess = files.slice(0, room);
     if (infoEl) infoEl.textContent = '⏳ Compressing…';
     for (const f of toProcess) {
-        try {
-            const dataUrl = await compressImageFile(f);
-            arr.push(dataUrl);
-        } catch (e) {
-            console.error(e);
-            showToast('Image process failed', 'error');
-        }
+        try { arr.push(await compressImageFile(f)); }
+        catch (e) { console.error(e); showToast('Image process failed', 'error'); }
     }
     inputEl.value = '';
     renderPickupImgList(which);
@@ -214,7 +196,6 @@ function selectReason(el, text) {
     selectedReason = text || '';
     document.querySelectorAll('.reason-btn').forEach(btn => btn.classList.remove('active'));
     if (el) el.classList.add('active');
-
     const otherInput = document.getElementById('otherReason');
     if (otherInput) {
         if (selectedReason && selectedReason.toLowerCase().includes('other')) {
@@ -225,10 +206,7 @@ function selectReason(el, text) {
             otherInput.value = '';
         }
     }
-
-    if (navigator.vibrate) {
-        try { navigator.vibrate(12); } catch (_) {}
-    }
+    if (navigator.vibrate) { try { navigator.vibrate(12); } catch (_) {} }
 }
 
 const rejectReasons = [
@@ -263,20 +241,11 @@ function startUserExistenceCheck() {
             return;
         }
         const data = snapshot.val();
-        
-        if (data.is_active === false) {
-            logoutUser();
-            showToast('🔒 Your account has been deactivated (employee left).', 'error');
-            return;
-        }
-        
+        if (data.is_active === false) { logoutUser(); showToast('🔒 Your account has been deactivated (employee left).', 'error'); return; }
         if (data.forceLogout === true) {
             userRef.update({ forceLogout: null }).catch(() => {});
-            logoutUser();
-            showToast('🔒 You have been logged out by admin.', 'info');
-            return;
+            logoutUser(); showToast('🔒 You have been logged out by admin.', 'info'); return;
         }
-        
         if (data.is_blocked === true && data.role !== 'admin') {
             const today = getLocalDate();
             const blockedDate = data.blocked_date || '';
@@ -298,10 +267,7 @@ function startUserExistenceCheck() {
 }
 
 function stopUserExistenceCheck() {
-    if (userListenerRef) {
-        userListenerRef.off();
-        userListenerRef = null;
-    }
+    if (userListenerRef) { userListenerRef.off(); userListenerRef = null; }
 }
 
 // === SECTION 7: AUTHENTICATION ===
@@ -309,51 +275,24 @@ async function loginUser() {
     const username = document.getElementById('loginUsername').value.trim().toLowerCase();
     const password = document.getElementById('loginPassword').value.trim();
     const errorEl = document.getElementById('loginError');
-
-    if (!username || !password) {
-        errorEl.textContent = 'Please enter both username and password.';
-        errorEl.style.display = 'block';
-        return;
-    }
+    if (!username || !password) { errorEl.textContent = 'Please enter both username and password.'; errorEl.style.display = 'block'; return; }
     errorEl.style.display = 'none';
-
     try {
         const snap = await db.ref('users/' + username).once('value');
-        if (!snap.exists()) {
-            errorEl.textContent = 'User not found. Check username.';
-            errorEl.style.display = 'block';
-            return;
-        }
+        if (!snap.exists()) { errorEl.textContent = 'User not found. Check username.'; errorEl.style.display = 'block'; return; }
         const userData = snap.val();
-        if (userData.password !== password) {
-            errorEl.textContent = 'Incorrect password.';
-            errorEl.style.display = 'block';
-            return;
-        }
-        if (userData.is_active === false) {
-            errorEl.textContent = '❌ Account disabled (employee left). Contact admin.';
-            errorEl.style.display = 'block';
-            return;
-        }
+        if (userData.password !== password) { errorEl.textContent = 'Incorrect password.'; errorEl.style.display = 'block'; return; }
+        if (userData.is_active === false) { errorEl.textContent = '❌ Account disabled (employee left). Contact admin.'; errorEl.style.display = 'block'; return; }
         currentUser = { username, name: userData.name, ...userData };
         localStorage.setItem('cashify_agent_user', JSON.stringify(currentUser));
         showMainApp();
         showToast('✅ Welcome, ' + currentUser.name + '!', 'success');
-        if (currentUser.role !== 'admin') {
-            await checkAttendanceAndBlock();
-            loadAttendanceHistory();
-        } else {
-            document.getElementById('attendanceTabBtn').style.display = 'none';
-            const bo = document.getElementById('blockedOverlay');
-            if (bo) bo.style.display = 'none';
-        }
-        loadTodayStats();
-        loadPendingOrders();
-        startUserExistenceCheck();
+        if (currentUser.role !== 'admin') { await checkAttendanceAndBlock(); loadAttendanceHistory(); }
+        else { document.getElementById('attendanceTabBtn').style.display = 'none'; const bo = document.getElementById('blockedOverlay'); if (bo) bo.style.display = 'none'; }
+        loadTodayStats(); loadPendingOrders(); startUserExistenceCheck();
     } catch (e) {
         console.error(e);
-        errorEl.textContent = 'Something went wrong. Try again.';
-        errorEl.style.display = 'block';
+        errorEl.textContent = 'Something went wrong. Try again.'; errorEl.style.display = 'block';
     }
 }
 
@@ -363,8 +302,7 @@ function logoutUser() {
     currentUser = null;
     document.getElementById('mainApp').style.display = 'none';
     document.getElementById('authOverlay').style.display = 'flex';
-    const bo = document.getElementById('blockedOverlay');
-    if (bo) bo.style.display = 'none';
+    const bo = document.getElementById('blockedOverlay'); if (bo) bo.style.display = 'none';
     hideMandatoryAttendanceModal();
     showToast('Logged out', 'info');
 }
@@ -379,38 +317,21 @@ function checkAuth() {
                     const userSnap = await db.ref('users/' + currentUser.username).once('value');
                     const userData = userSnap.val();
                     if (userData && userData.is_active === false) {
-                        logoutUser();
-                        showToast('🔒 Your account has been deactivated (left).', 'error');
-                        return;
+                        logoutUser(); showToast('🔒 Your account has been deactivated (left).', 'error'); return;
                     }
                     showMainApp();
-                    if (currentUser.role !== 'admin') {
-                        await checkAttendanceAndBlock();
-                        loadAttendanceHistory();
-                    } else {
-                        document.getElementById('attendanceTabBtn').style.display = 'none';
-                        const bo = document.getElementById('blockedOverlay');
-                        if (bo) bo.style.display = 'none';
-                    }
-                    loadTodayStats();
-                    loadPendingOrders();
-                    startUserExistenceCheck();
-                } else {
-                    logoutUser();
-                    showToast('❌ Account deleted. Please contact admin.', 'error');
-                }
+                    if (currentUser.role !== 'admin') { await checkAttendanceAndBlock(); loadAttendanceHistory(); }
+                    else { document.getElementById('attendanceTabBtn').style.display = 'none'; const bo = document.getElementById('blockedOverlay'); if (bo) bo.style.display = 'none'; }
+                    loadTodayStats(); loadPendingOrders(); startUserExistenceCheck();
+                } else { logoutUser(); showToast('❌ Account deleted. Please contact admin.', 'error'); }
             });
             return true;
-        } catch (e) {
-            localStorage.removeItem('cashify_agent_user');
-        }
+        } catch (e) { localStorage.removeItem('cashify_agent_user'); }
     }
     return false;
 }
 
-function verifyUserExists(username) {
-    return db.ref('users/' + username).once('value').then(snap => snap.exists());
-}
+function verifyUserExists(username) { return db.ref('users/' + username).once('value').then(snap => snap.exists()); }
 
 function showMainApp() {
     document.getElementById('authOverlay').style.display = 'none';
@@ -426,16 +347,9 @@ function showChangePassword() {
     if (!currentUser) return;
     Swal.fire({
         title: 'Change Password',
-        html: `
-            <p class="text-sm text-gray-600 mb-2">Change your login password</p>
-            <input type="password" id="newPw" class="swal2-input" placeholder="New password" minlength="4">
-            <input type="password" id="confirmPw" class="swal2-input" placeholder="Confirm" minlength="4">
-        `,
-        showCancelButton: true,
-        confirmButtonText: 'Update Password',
-        cancelButtonText: 'Cancel',
-        confirmButtonColor: '#4f46e5',
-        cancelButtonColor: '#64748b',
+        html: `<p class="text-sm text-gray-600 mb-2">Change your login password</p><input type="password" id="newPw" class="swal2-input" placeholder="New password" minlength="4"><input type="password" id="confirmPw" class="swal2-input" placeholder="Confirm" minlength="4">`,
+        showCancelButton: true, confirmButtonText: 'Update Password', cancelButtonText: 'Cancel',
+        confirmButtonColor: '#4f46e5', cancelButtonColor: '#64748b',
         preConfirm: () => {
             const n = document.getElementById('newPw').value;
             const c = document.getElementById('confirmPw').value;
@@ -459,62 +373,35 @@ function showChangePassword() {
 async function checkAttendanceAndBlock() {
     if (!currentUser) return;
     if (currentUser.role === 'admin') return;
-
     const today = getLocalDate();
     const dateEl = document.getElementById('attendanceDateDisplay');
     if (dateEl) dateEl.textContent = today;
-
     const floatingDateEl = document.getElementById('floatingAttDate');
     if (floatingDateEl) floatingDateEl.textContent = today;
-
     try {
         const userSnap = await db.ref('users/' + currentUser.username).once('value');
         const userData = userSnap.val() || {};
         if (userData.is_blocked === true && userData.blocked_date !== today) {
-            await db.ref('users/' + currentUser.username).update({
-                is_blocked: false,
-                blocked_date: null
-            });
+            await db.ref('users/' + currentUser.username).update({ is_blocked: false, blocked_date: null });
             const overlay = document.getElementById('blockedOverlay');
             if (overlay) overlay.style.display = 'none';
         }
-
         const freshSnap = await db.ref('users/' + currentUser.username + '/is_blocked').once('value');
         if (freshSnap.val() === true) {
             const overlay = document.getElementById('blockedOverlay');
             if (overlay) overlay.style.display = 'flex';
-            updateAttendanceUI('blocked');
-            hideMandatoryAttendanceModal();
-            return;
+            updateAttendanceUI('blocked'); hideMandatoryAttendanceModal(); return;
         }
-
         const attSnap = await db.ref('attendance/' + currentUser.username + '/' + today).once('value');
         const att = attSnap.val();
-
-        if (att && att.status === 'present') {
-            updateAttendanceUI('present');
-            hideMandatoryAttendanceModal();
-            loadAttendanceHistory();
-            loadAgentSalarySummary();
-            return;
-        }
-
+        if (att && att.status === 'present') { updateAttendanceUI('present'); hideMandatoryAttendanceModal(); loadAttendanceHistory(); loadAgentSalarySummary(); return; }
         if (att && att.status === 'absent' && att.blocked) {
             const overlay = document.getElementById('blockedOverlay');
             if (overlay) overlay.style.display = 'flex';
-            updateAttendanceUI('blocked');
-            hideMandatoryAttendanceModal();
-            loadAttendanceHistory();
-            return;
+            updateAttendanceUI('blocked'); hideMandatoryAttendanceModal(); loadAttendanceHistory(); return;
         }
-
-        updateAttendanceUI('unmarked');
-        showMandatoryAttendanceModal();
-        loadAttendanceHistory();
-        loadAgentSalarySummary();
-    } catch (e) {
-        console.error('Error checking attendance:', e);
-    }
+        updateAttendanceUI('unmarked'); showMandatoryAttendanceModal(); loadAttendanceHistory(); loadAgentSalarySummary();
+    } catch (e) { console.error('Error checking attendance:', e); }
 }
 
 function updateAttendanceUI(status) {
@@ -522,29 +409,18 @@ function updateAttendanceUI(status) {
     const actionGrid = document.getElementById('attendanceActionGrid');
     const lockNotice = document.getElementById('attendanceLockNotice');
     const overlay = document.getElementById('blockedOverlay');
-
     if (!badge) return;
-
     if (status === 'present') {
-        badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800';
-        badge.textContent = '✅ Present';
+        badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800'; badge.textContent = '✅ Present';
         if (actionGrid) actionGrid.style.display = 'none';
-        if (lockNotice) {
-            lockNotice.classList.remove('hidden');
-            lockNotice.textContent = '✅ Attendance recorded as Present for today.';
-        }
+        if (lockNotice) { lockNotice.classList.remove('hidden'); lockNotice.textContent = '✅ Attendance recorded as Present for today.'; }
         if (overlay) overlay.style.display = 'none';
     } else if (status === 'blocked' || status === 'absent') {
-        badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-rose-100 text-rose-800';
-        badge.textContent = '❌ Blocked / Absent';
+        badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-rose-100 text-rose-800'; badge.textContent = '❌ Blocked / Absent';
         if (actionGrid) actionGrid.style.display = 'none';
-        if (lockNotice) {
-            lockNotice.classList.remove('hidden');
-            lockNotice.textContent = '🔒 You are marked Absent/Blocked for today. Contact admin to unblock.';
-        }
+        if (lockNotice) { lockNotice.classList.remove('hidden'); lockNotice.textContent = '🔒 You are marked Absent/Blocked for today. Contact admin to unblock.'; }
     } else {
-        badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800';
-        badge.textContent = '⚠️ Not Marked';
+        badge.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800'; badge.textContent = '⚠️ Not Marked';
         if (actionGrid) actionGrid.style.display = 'grid';
         if (lockNotice) lockNotice.classList.add('hidden');
         if (overlay) overlay.style.display = 'none';
@@ -556,134 +432,60 @@ async function openAttendanceOtpModal() {
     const attSnap = await db.ref('attendance/' + currentUser.username + '/' + today).once('value');
     if (attSnap.exists() && attSnap.val().status) {
         Swal.fire({ icon: 'info', title: 'Already Marked', text: 'Attendance is already recorded for today.' });
-        hideMandatoryAttendanceModal();
-        return;
+        hideMandatoryAttendanceModal(); return;
     }
-
     const { value: otp, isConfirmed } = await Swal.fire({
-        title: '🔐 Verify OTP',
-        text: 'Enter the 6-digit OTP shared by Admin for today:',
-        input: 'text',
-        inputPlaceholder: '6-digit OTP',
-        inputAttributes: { maxlength: 6, inputmode: 'numeric' },
-        showCancelButton: true,
-        confirmButtonText: 'Verify & Mark Present',
-        cancelButtonText: 'Cancel',
-        confirmButtonColor: '#059669',
-        cancelButtonColor: '#64748b'
+        title: '🔐 Verify OTP', text: 'Enter the 6-digit OTP shared by Admin for today:',
+        input: 'text', inputPlaceholder: '6-digit OTP', inputAttributes: { maxlength: 6, inputmode: 'numeric' },
+        showCancelButton: true, confirmButtonText: 'Verify & Mark Present', cancelButtonText: 'Cancel',
+        confirmButtonColor: '#059669', cancelButtonColor: '#64748b'
     });
-
     if (!isConfirmed || !otp) return;
-
     const trimmedOtp = otp.trim();
-    if (trimmedOtp.length !== 6) {
-        Swal.fire({ icon: 'error', title: 'Invalid OTP', text: 'Please enter a valid 6-digit OTP.' });
-        return;
-    }
-
+    if (trimmedOtp.length !== 6) { Swal.fire({ icon: 'error', title: 'Invalid OTP', text: 'Please enter a valid 6-digit OTP.' }); return; }
     try {
         let otpData = null;
         const dailySnap = await db.ref('daily_otp/' + today + '/' + currentUser.username).once('value');
-        if (dailySnap.exists()) {
-            otpData = dailySnap.val();
-        } else {
-            const agentOtpSnap = await db.ref('otp/' + currentUser.username).once('value');
-            if (agentOtpSnap.exists()) otpData = agentOtpSnap.val();
-        }
-
-        if (!otpData || String(otpData.otp).trim() !== trimmedOtp) {
-            Swal.fire({ icon: 'error', title: 'Incorrect OTP', text: "The OTP entered is incorrect. Ask Admin for today's OTP." });
-            return;
-        }
-
-        if (otpData.used === true) {
-            Swal.fire({ icon: 'error', title: 'OTP Already Used', text: 'This OTP has already been used.' });
-            return;
-        }
-
-        await db.ref('attendance/' + currentUser.username + '/' + today).set({
-            status: 'present',
-            timestamp: Date.now(),
-            otp_used: trimmedOtp,
-            blocked: false,
-            salary_counted: true,
-            marked_by: 'agent_otp'
-        });
-
-        if (dailySnap.exists()) {
-            await db.ref('daily_otp/' + today + '/' + currentUser.username + '/used').set(true);
-        } else {
-            await db.ref('otp/' + currentUser.username + '/used').set(true);
-        }
-
+        if (dailySnap.exists()) otpData = dailySnap.val();
+        else { const agentOtpSnap = await db.ref('otp/' + currentUser.username).once('value'); if (agentOtpSnap.exists()) otpData = agentOtpSnap.val(); }
+        if (!otpData || String(otpData.otp).trim() !== trimmedOtp) { Swal.fire({ icon: 'error', title: 'Incorrect OTP', text: "The OTP entered is incorrect. Ask Admin for today's OTP." }); return; }
+        if (otpData.used === true) { Swal.fire({ icon: 'error', title: 'OTP Already Used', text: 'This OTP has already been used.' }); return; }
+        await db.ref('attendance/' + currentUser.username + '/' + today).set({ status: 'present', timestamp: Date.now(), otp_used: trimmedOtp, blocked: false, salary_counted: true, marked_by: 'agent_otp' });
+        if (dailySnap.exists()) await db.ref('daily_otp/' + today + '/' + currentUser.username + '/used').set(true);
+        else await db.ref('otp/' + currentUser.username + '/used').set(true);
         showToast('✅ Attendance marked Present!', 'success');
-        updateAttendanceUI('present');
-        hideMandatoryAttendanceModal();
-        loadAttendanceHistory();
-        loadAgentSalarySummary();
-    } catch (e) {
-        console.error('Error verifying attendance OTP:', e);
-        showToast('Verification failed. Check network.', 'error');
-    }
+        updateAttendanceUI('present'); hideMandatoryAttendanceModal(); loadAttendanceHistory(); loadAgentSalarySummary();
+    } catch (e) { console.error('Error verifying attendance OTP:', e); showToast('Verification failed. Check network.', 'error'); }
 }
 
 async function handleMarkAbsent() {
     const { value: reason, isConfirmed } = await Swal.fire({
-        title: 'Mark as Absent?',
-        text: 'You will be locked for the day. Salary for today will not be counted unless admin unblocks.',
-        input: 'text',
-        inputPlaceholder: 'Reason for absence...',
-        showCancelButton: true,
-        confirmButtonText: 'Yes, Mark Absent',
-        cancelButtonText: 'Cancel',
-        confirmButtonColor: '#dc2626',
-        cancelButtonColor: '#64748b'
+        title: 'Mark as Absent?', text: 'You will be locked for the day. Salary for today will not be counted unless admin unblocks.',
+        input: 'text', inputPlaceholder: 'Reason for absence...',
+        showCancelButton: true, confirmButtonText: 'Yes, Mark Absent', cancelButtonText: 'Cancel',
+        confirmButtonColor: '#dc2626', cancelButtonColor: '#64748b'
     });
-
     if (!isConfirmed) return;
-
     const today = getLocalDate();
     try {
-        await db.ref('attendance/' + currentUser.username + '/' + today).set({
-            status: 'absent',
-            reason: reason || 'Not specified',
-            timestamp: Date.now(),
-            blocked: true,
-            salary_counted: false,
-            marked_by: 'agent_self'
-        });
-
-        await db.ref('users/' + currentUser.username).update({
-            is_blocked: true,
-            blocked_date: today
-        });
-
+        await db.ref('attendance/' + currentUser.username + '/' + today).set({ status: 'absent', reason: reason || 'Not specified', timestamp: Date.now(), blocked: true, salary_counted: false, marked_by: 'agent_self' });
+        await db.ref('users/' + currentUser.username).update({ is_blocked: true, blocked_date: today });
         showToast('🔒 Marked as Absent. Account locked for today.', 'info');
         updateAttendanceUI('blocked');
         const overlay = document.getElementById('blockedOverlay');
         if (overlay) overlay.style.display = 'flex';
-        hideMandatoryAttendanceModal();
-        loadAttendanceHistory();
-    } catch (e) {
-        console.error(e);
-        showToast('Failed to mark absent.', 'error');
-    }
+        hideMandatoryAttendanceModal(); loadAttendanceHistory();
+    } catch (e) { console.error(e); showToast('Failed to mark absent.', 'error'); }
 }
 
 async function loadAttendanceHistory() {
     const container = document.getElementById('attendanceHistoryList');
     if (!container || !currentUser) return;
-
     try {
         const snap = await db.ref('attendance/' + currentUser.username).limitToLast(7).once('value');
         const data = snap.val() || {};
-
         const dates = Object.keys(data).sort().reverse();
-        if (dates.length === 0) {
-            container.innerHTML = '<div class="text-gray-400 text-center py-2">No recent records found.</div>';
-            return;
-        }
-
+        if (dates.length === 0) { container.innerHTML = '<div class="text-gray-400 text-center py-2">No recent records found.</div>'; return; }
         let html = '';
         dates.forEach(d => {
             const item = data[d];
@@ -691,18 +493,10 @@ async function loadAttendanceHistory() {
             const isHalf = item.half_day === true;
             const badgeClass = isHalf ? 'bg-amber-100 text-amber-800' : (isPres ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800');
             const label = isHalf ? 'Half Day' : (isPres ? 'Present' : 'Absent');
-
-            html += `
-                <div class="flex items-center justify-between p-2 rounded-lg bg-gray-50 border border-gray-100">
-                    <span class="font-medium text-gray-700">${d}</span>
-                    <span class="px-2 py-0.5 rounded text-[11px] font-semibold ${badgeClass}">${label}</span>
-                </div>
-            `;
+            html += `<div class="flex items-center justify-between p-2 rounded-lg bg-gray-50 border border-gray-100"><span class="font-medium text-gray-700">${d}</span><span class="px-2 py-0.5 rounded text-[11px] font-semibold ${badgeClass}">${label}</span></div>`;
         });
         container.innerHTML = html;
-    } catch (e) {
-        container.innerHTML = '<div class="text-gray-400 text-center py-2">Failed to load history.</div>';
-    }
+    } catch (e) { container.innerHTML = '<div class="text-gray-400 text-center py-2">Failed to load history.</div>'; }
 }
 
 async function loadAgentSalarySummary() {
@@ -710,44 +504,30 @@ async function loadAgentSalarySummary() {
     const pendingNotice = document.getElementById('salaryPendingNotice');
     const badge = document.getElementById('salaryStatusBadge');
     if (!currentUser || !approvedContent) return;
-
     const today = new Date();
     const curMonth = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
-
     try {
         const snap = await db.ref('salaries/' + curMonth + '/' + currentUser.username).once('value');
         const sal = snap.val();
-
         if (sal && (sal.approved === true || sal.status === 'approved' || sal.visible_to_agent === true)) {
-            if (badge) {
-                badge.className = 'text-[11px] px-2.5 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-800';
-                badge.textContent = 'Approved by Admin';
-            }
+            if (badge) { badge.className = 'text-[11px] px-2.5 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-800'; badge.textContent = 'Approved by Admin'; }
             approvedContent.style.display = 'block';
             if (pendingNotice) pendingNotice.style.display = 'none';
-
             const base = sal.base_salary || sal.total_salary || 0;
             const ded = sal.deductions || sal.cut || 0;
             const net = sal.net_salary || sal.final_payable || (base - ded);
-
             const elTotal = document.getElementById('agentTotalSalary');
             const elDed = document.getElementById('agentDeductions');
             const elNet = document.getElementById('agentFinalSalary');
-
             if (elTotal) elTotal.textContent = '₹' + Number(base).toLocaleString('en-IN');
             if (elDed) elDed.textContent = '-₹' + Number(ded).toLocaleString('en-IN');
             if (elNet) elNet.textContent = '₹' + Number(net).toLocaleString('en-IN');
         } else {
-            if (badge) {
-                badge.className = 'text-[11px] px-2.5 py-0.5 rounded-full font-semibold bg-gray-100 text-gray-600';
-                badge.textContent = 'Pending Admin Approval';
-            }
+            if (badge) { badge.className = 'text-[11px] px-2.5 py-0.5 rounded-full font-semibold bg-gray-100 text-gray-600'; badge.textContent = 'Pending Admin Approval'; }
             approvedContent.style.display = 'none';
             if (pendingNotice) pendingNotice.style.display = 'block';
         }
-    } catch (e) {
-        console.error('Error fetching agent salary:', e);
-    }
+    } catch (e) { console.error('Error fetching agent salary:', e); }
 }
 
 // ================================================================
@@ -768,30 +548,20 @@ function hideMandatoryAttendanceModal() {
 
 async function promptPresentFromFloating() {
     if (!currentUser) return;
-    try {
-        await openAttendanceOtpModal();
-    } catch (e) {
-        console.error('Present flow error:', e);
-    }
+    try { await openAttendanceOtpModal(); } catch (e) { console.error('Present flow error:', e); }
     await checkAttendanceAndBlock();
 }
 
 async function confirmAbsentFromFloating() {
     if (!currentUser) return;
-    try {
-        await handleMarkAbsent();
-    } catch (e) {
-        console.error('Absent flow error:', e);
-    }
+    try { await handleMarkAbsent(); } catch (e) { console.error('Absent flow error:', e); }
     hideMandatoryAttendanceModal();
     await checkAttendanceAndBlock();
 }
 
 // === SECTION 10: TAB SWITCHING ===
 function switchTab(tab) {
-    document.querySelectorAll('#mainTabBar button').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.tab === tab);
-    });
+    document.querySelectorAll('#mainTabBar button').forEach(btn => { btn.classList.toggle('active', btn.dataset.tab === tab); });
     document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
     document.getElementById('tab-' + tab).style.display = 'block';
     if (tab === 'pending') loadPendingOrders();
@@ -845,12 +615,9 @@ async function loadPendingOrders() {
         const snapshot = await db.ref('pending').orderByChild('agent').equalTo(currentUser.username).once('value');
         const data = snapshot.val() || {};
         allPendingOrders = [];
-        for (const [orderId, item] of Object.entries(data || {})) {
-            allPendingOrders.push({ orderId, ...item });
-        }
+        for (const [orderId, item] of Object.entries(data || {})) { allPendingOrders.push({ orderId, ...item }); }
         allPendingOrders.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-        renderPendingList();
-        updatePendingCounts();
+        renderPendingList(); updatePendingCounts();
     } catch (e) {
         console.log(e);
         document.getElementById('pendingList').innerHTML = '<div class="pending-empty"><i data-lucide="alert-circle"></i><p class="text-sm font-medium text-red-500">Error loading</p></div>';
@@ -868,29 +635,18 @@ function updatePendingCounts() {
 
 function setPendingFilter(filter) {
     pendingFilter = filter;
-    document.querySelectorAll('#pendingTabBar button').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.filter === filter);
-    });
+    document.querySelectorAll('#pendingTabBar button').forEach(btn => { btn.classList.toggle('active', btn.dataset.filter === filter); });
     renderPendingList();
 }
 
 function renderPendingList() {
     const container = document.getElementById('pendingList');
     let filtered = [...allPendingOrders];
-    if (pendingFilter === 'onway') {
-        filtered = filtered.filter(item => item.reason && item.reason.toLowerCase().includes('on the way'));
-    }
+    if (pendingFilter === 'onway') filtered = filtered.filter(item => item.reason && item.reason.toLowerCase().includes('on the way'));
     if (filtered.length === 0) {
         const msg = pendingFilter === 'onway' ? 'No "On the way" orders' : 'No pending orders';
-        container.innerHTML = `
-            <div class="pending-empty">
-                <i data-lucide="inbox"></i>
-                <p class="text-sm font-medium">${msg}</p>
-                <p class="text-xs text-gray-400 mt-1">Orders you reschedule will appear here</p>
-            </div>
-        `;
-        lucide.createIcons();
-        return;
+        container.innerHTML = `<div class="pending-empty"><i data-lucide="inbox"></i><p class="text-sm font-medium">${msg}</p><p class="text-xs text-gray-400 mt-1">Orders you reschedule will appear here</p></div>`;
+        lucide.createIcons(); return;
     }
     let html = '';
     filtered.forEach(item => {
@@ -903,30 +659,21 @@ function renderPendingList() {
             <div class="pending-item glass rounded-xl p-4 mb-3 shadow">
                 <div class="flex items-start justify-between">
                     <div class="flex-1 min-w-0">
-                        <div class="flex items-center gap-2 flex-wrap">
-                            <span class="font-mono font-bold text-gray-800 text-sm">${item.orderId}</span>
-                            ${badge}
-                            <span class="text-xs text-gray-400">(${model})</span>
-                        </div>
+                        <div class="flex items-center gap-2 flex-wrap"><span class="font-mono font-bold text-gray-800 text-sm">${item.orderId}</span>${badge}<span class="text-xs text-gray-400">(${model})</span></div>
                         <p class="text-xs text-gray-500 mt-1"><i data-lucide="message-circle" class="w-3 h-3 inline"></i> ${reason}</p>
                         <p class="text-xs text-gray-400 mt-0.5"><i data-lucide="clock" class="w-3 h-3 inline"></i> ${time}</p>
                     </div>
-                    <button onclick="markPendingDone('${item.orderId}')" class="done-btn flex-shrink-0 ml-3">
-                        <i data-lucide="check-circle"></i> Done
-                    </button>
+                    <button onclick="markPendingDone('${item.orderId}')" class="done-btn flex-shrink-0 ml-3"><i data-lucide="check-circle"></i> Done</button>
                 </div>
-            </div>
-        `;
+            </div>`;
     });
-    container.innerHTML = html;
-    lucide.createIcons();
+    container.innerHTML = html; lucide.createIcons();
 }
 
 function markPendingDone(orderId) {
     pendingDoneOrderId = orderId;
     document.getElementById('orderId').value = orderId;
-    switchTab('pickup');
-    showForm('pickup');
+    switchTab('pickup'); showForm('pickup');
     showToast(`📦 Pending order ${orderId} — fill pickup details`, 'info');
 }
 
@@ -936,31 +683,20 @@ async function pasteOrderId() {
         const text = await navigator.clipboard.readText();
         document.getElementById('orderId').value = text.trim().toUpperCase();
         showToast('Pasted!', 'success');
-    } catch (e) {
-        showToast('Cannot access clipboard', 'error');
-    }
+    } catch (e) { showToast('Cannot access clipboard', 'error'); }
 }
 
 // === SECTION 15: SHOW FORM ===
 let backNavigationReady = false;
-
 function setupBackNavigation() {
     if (backNavigationReady) return;
     backNavigationReady = true;
-
     history.replaceState({ view: 'order' }, '', window.location.href);
-
     window.addEventListener('popstate', () => {
         const scannerModal = document.getElementById('scannerModal');
-        if (scannerModal && !scannerModal.classList.contains('hidden')) {
-            stopScanner();
-            return;
-        }
-
+        if (scannerModal && !scannerModal.classList.contains('hidden')) { stopScanner(); return; }
         const stepForm = document.getElementById('step-form');
-        if (stepForm && !stepForm.classList.contains('hidden')) {
-            goBack();
-        }
+        if (stepForm && !stepForm.classList.contains('hidden')) goBack();
     });
 }
 
@@ -968,11 +704,8 @@ function goBack() {
     const stepOrder = document.getElementById('step-order');
     const stepForm = document.getElementById('step-form');
     if (stepForm && !stepForm.classList.contains('hidden')) {
-        stepForm.classList.add('hidden');
-        stepOrder.classList.remove('hidden');
-        currentStatus = '';
-        selectedReason = '';
-        hiddenImei2 = '';
+        stepForm.classList.add('hidden'); stepOrder.classList.remove('hidden');
+        currentStatus = ''; selectedReason = ''; hiddenImei2 = '';
         const orderInput = document.getElementById('orderId');
         if (orderInput) orderInput.focus();
         if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -983,22 +716,12 @@ function goBack() {
 }
 
 function showForm(status) {
-    clearPickupImageState();
-    resetSpecSelection();
+    clearPickupImageState(); resetSpecSelection();
     let orderId = document.getElementById('orderId').value.trim().toUpperCase();
-    if (!orderId && pendingDoneOrderId) {
-        orderId = pendingDoneOrderId;
-        document.getElementById('orderId').value = orderId;
-    }
-    if (!orderId) {
-        Swal.fire({ icon: 'warning', title: 'Order ID Missing', text: 'Please enter the Order ID first', confirmButtonColor: '#3b82f6' });
-        document.getElementById('orderId').focus();
-        return;
-    }
+    if (!orderId && pendingDoneOrderId) { orderId = pendingDoneOrderId; document.getElementById('orderId').value = orderId; }
+    if (!orderId) { Swal.fire({ icon: 'warning', title: 'Order ID Missing', text: 'Please enter the Order ID first', confirmButtonColor: '#3b82f6' }); document.getElementById('orderId').focus(); return; }
     pendingDoneOrderId = null;
-    currentStatus = status;
-    selectedReason = '';
-    hiddenImei2 = '';
+    currentStatus = status; selectedReason = ''; hiddenImei2 = '';
     document.getElementById('step-order').classList.add('hidden');
     document.getElementById('step-form').classList.remove('hidden');
     document.getElementById('displayOrderId').textContent = orderId;
@@ -1012,518 +735,224 @@ function showForm(status) {
     formFields.innerHTML = '';
 
     if (status === 'pickup') {
-        formTitle.innerText = "Pickup Details";
-        formSubtitle.innerText = "Fill device information";
+        formTitle.innerText = "Pickup Details"; formSubtitle.innerText = "Fill device information";
         formIcon.className = "w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-green-500 to-emerald-600";
         formIcon.innerHTML = '<i data-lucide="check-circle-2" class="w-7 h-7 text-white"></i>';
         submitBtn.className = 'btn-bounce w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white p-4 rounded-2xl font-bold text-lg shadow-xl flex items-center justify-center gap-2';
         formFields.innerHTML = `
-            <div>
-                <label class="text-xs font-bold text-gray-500 mb-1.5 block">PHONE MODEL *</label>
-                <input type="text" id="phoneModel" placeholder="e.g., iPhone 12, Samsung S21" class="input-field w-full p-3.5 rounded-xl outline-none">
-            </div>
-            <div>
-                <label class="text-xs font-bold text-gray-500 mb-1.5 block">IMEI NUMBER *</label>
-                <div class="relative">
-                    <input type="text" id="imei" placeholder="15-digit IMEI" class="input-field w-full p-3.5 rounded-xl outline-none pr-28 font-mono" inputmode="numeric" maxlength="15">
-                    <button onclick="startScanner()" class="btn-scan-imei absolute right-1.5 top-1/2 -translate-y-1/2">
-                        <i data-lucide="scan-line"></i> Scan
-                    </button>
-                </div>
-                <p class="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
-                    <span>📱</span>
-                    <span>Barcode scan karo ya <strong>*#06#</strong> screen — Capture dabao, fatafat ho jaega!</span>
-                </p>
-            </div>
-            <div>
-                <label class="text-xs font-bold text-gray-500 mb-1.5 block">AGREED VALUE (₹) *</label>
-                <div class="relative">
-                    <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 font-bold">₹</span>
-                    <input type="number" id="value" placeholder="0" class="input-field w-full p-3.5 pl-8 rounded-xl outline-none font-bold text-lg" inputmode="numeric">
-                </div>
-            </div>
-
-            <!-- 🪙 COINS INPUT (quantity only — rate/value never shown to agent) -->
-            <div>
-                <label class="text-xs font-bold text-gray-500 mb-1.5 block">COINS *</label>
-                <div class="relative">
-                    <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 font-bold">🪙</span>
-                    <input type="number" id="coins" placeholder="Enter coins quantity" class="input-field w-full p-3.5 pl-10 rounded-xl outline-none font-bold text-lg" inputmode="numeric" min="0" step="1">
-                </div>
-                <p class="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
-                    <span>ℹ️</span>
-                    <span>Enter the number of coins collected from customer.</span>
-                </p>
-            </div>
-
-            <div>
-                <label class="text-xs font-bold text-gray-500 mb-1.5 block">CUSTOMER NAME <span class="text-gray-400">(Optional)</span></label>
-                <input type="text" id="custName" placeholder="Enter name" class="input-field w-full p-3.5 rounded-xl outline-none">
-            </div>
-
+            <div><label class="text-xs font-bold text-gray-500 mb-1.5 block">PHONE MODEL *</label><input type="text" id="phoneModel" placeholder="e.g., iPhone 12, Samsung S21" class="input-field w-full p-3.5 rounded-xl outline-none"></div>
+            <div><label class="text-xs font-bold text-gray-500 mb-1.5 block">IMEI NUMBER *</label><div class="relative"><input type="text" id="imei" placeholder="15-digit IMEI" class="input-field w-full p-3.5 rounded-xl outline-none pr-28 font-mono" inputmode="numeric" maxlength="15"><button onclick="startScanner()" class="btn-scan-imei absolute right-1.5 top-1/2 -translate-y-1/2"><i data-lucide="scan-line"></i> Scan</button></div><p class="text-xs text-gray-400 mt-1.5 flex items-center gap-1"><span>📱</span><span>Barcode scan karo ya <strong>*#06#</strong> screen — Capture dabao!</span></p></div>
+            <div><label class="text-xs font-bold text-gray-500 mb-1.5 block">AGREED VALUE (₹) *</label><div class="relative"><span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 font-bold">₹</span><input type="number" id="value" placeholder="0" class="input-field w-full p-3.5 pl-8 rounded-xl outline-none font-bold text-lg" inputmode="numeric"></div></div>
+            <div><label class="text-xs font-bold text-gray-500 mb-1.5 block">COINS *</label><div class="relative"><span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 font-bold">🪙</span><input type="number" id="coins" placeholder="Enter coins quantity" class="input-field w-full p-3.5 pl-10 rounded-xl outline-none font-bold text-lg" inputmode="numeric" min="0" step="1"></div><p class="text-xs text-gray-400 mt-1.5 flex items-center gap-1"><span>ℹ️</span><span>Enter the number of coins collected from customer.</span></p></div>
+            <div><label class="text-xs font-bold text-gray-500 mb-1.5 block">CUSTOMER NAME <span class="text-gray-400">(Optional)</span></label><input type="text" id="custName" placeholder="Enter name" class="input-field w-full p-3.5 rounded-xl outline-none"></div>
             <div class="pt-2 border-t border-gray-100">
                 <p class="text-xs font-bold text-gray-500 mb-3 tracking-wide">⚙️ DEVICE SPECS <span class="text-red-500 font-bold">(Required)</span></p>
-
-                <div class="spec-group">
-                    <div class="spec-label"><span class="t">RAM *</span><span class="picked empty" id="ramPick">Not selected</span></div>
-                    <div class="chip-grid">${buildSpecChips('ram', RAM_OPTIONS)}</div>
-                </div>
-
-                <div class="spec-group mt-4">
-                    <div class="spec-label"><span class="t">STORAGE (ROM) *</span><span class="picked empty" id="storagePick">Not selected</span></div>
-                    <div class="chip-grid">${buildSpecChips('storage', STORAGE_OPTIONS)}</div>
-                </div>
-
-                <div class="spec-group mt-4">
-                    <div class="spec-label"><span class="t">NETWORK *</span><span class="picked empty" id="networkPick">Not selected</span></div>
-                    <div class="chip-grid">${buildSpecChips('network', NETWORK_OPTIONS, 'net')}</div>
-                </div>
-
+                <div class="spec-group"><div class="spec-label"><span class="t">RAM *</span><span class="picked empty" id="ramPick">Not selected</span></div><div class="chip-grid">${buildSpecChips('ram', RAM_OPTIONS)}</div></div>
+                <div class="spec-group mt-4"><div class="spec-label"><span class="t">STORAGE (ROM) *</span><span class="picked empty" id="storagePick">Not selected</span></div><div class="chip-grid">${buildSpecChips('storage', STORAGE_OPTIONS)}</div></div>
+                <div class="spec-group mt-4"><div class="spec-label"><span class="t">NETWORK *</span><span class="picked empty" id="networkPick">Not selected</span></div><div class="chip-grid cols-5">${buildSpecChips('network', NETWORK_OPTIONS, 'net')}</div></div>
                 <div class="spec-summary" id="specSummary"></div>
-                <input type="hidden" id="ramStorage" value="">
-                <input type="hidden" id="networkType" value="">
+                <input type="hidden" id="ramStorage" value=""><input type="hidden" id="networkType" value="">
             </div>
-
             <div class="pt-2 border-t border-gray-100">
                 <p class="text-xs font-bold text-gray-500 mb-2 tracking-wide">📄 DOCUMENTS <span class="text-gray-400 font-medium">(All Optional)</span></p>
-
-                <div class="mb-3">
-                    <label class="text-xs font-semibold text-gray-500 mb-1 block">Bill Number</label>
-                    <input type="text" id="billNumber" placeholder="Bill / Invoice no." class="input-field w-full p-3 rounded-xl outline-none">
-                </div>
-                <div class="mb-4">
-                    <label class="text-xs font-semibold text-gray-500 mb-1 block">Bill Images <span class="text-gray-400 font-normal">(up to 3)</span></label>
-                    <div class="grid grid-cols-2 gap-2">
-                        <label for="billImageCam" class="btn-bounce cursor-pointer flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-blue-300 bg-blue-50 text-blue-700 font-semibold text-sm">
-                            <i data-lucide="camera" class="w-4 h-4"></i> Camera
-                        </label>
-                        <label for="billImageGal" class="btn-bounce cursor-pointer flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-blue-300 bg-blue-50 text-blue-700 font-semibold text-sm">
-                            <i data-lucide="image" class="w-4 h-4"></i> Gallery
-                        </label>
-                    </div>
-                    <input id="billImageCam" type="file" accept="image/*" capture="environment" class="hidden" onchange="handlePickupImagePick(this,'bill')">
-                    <input id="billImageGal" type="file" accept="image/*" multiple class="hidden" onchange="handlePickupImagePick(this,'bill')">
-                    <div id="billImgPreview" class="mt-2"></div>
-                    <div id="billImgInfo" class="text-[11px] text-gray-500 mt-1">3 images max · 3 slots free</div>
-                </div>
-
-                <div class="mb-3">
-                    <label class="text-xs font-semibold text-gray-500 mb-1 block">Aadhaar Number</label>
-                    <input type="text" id="aadhaarNumber" placeholder="12-digit Aadhaar" inputmode="numeric" maxlength="14" class="input-field w-full p-3 rounded-xl outline-none font-mono">
-                </div>
-                <div>
-                    <label class="text-xs font-semibold text-gray-500 mb-1 block">Aadhaar Images <span class="text-gray-400 font-normal">(up to 3)</span></label>
-                    <div class="grid grid-cols-2 gap-2">
-                        <label for="aadhaarImageCam" class="btn-bounce cursor-pointer flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50 text-indigo-700 font-semibold text-sm">
-                            <i data-lucide="camera" class="w-4 h-4"></i> Camera
-                        </label>
-                        <label for="aadhaarImageGal" class="btn-bounce cursor-pointer flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50 text-indigo-700 font-semibold text-sm">
-                            <i data-lucide="image" class="w-4 h-4"></i> Gallery
-                        </label>
-                    </div>
-                    <input id="aadhaarImageCam" type="file" accept="image/*" capture="environment" class="hidden" onchange="handlePickupImagePick(this,'aadhaar')">
-                    <input id="aadhaarImageGal" type="file" accept="image/*" multiple class="hidden" onchange="handlePickupImagePick(this,'aadhaar')">
-                    <div id="aadhaarImgPreview" class="mt-2"></div>
-                    <div id="aadhaarImgInfo" class="text-[11px] text-gray-500 mt-1">3 images max · 3 slots free</div>
-                </div>
-            </div>
-        `;
+                <div class="mb-3"><label class="text-xs font-semibold text-gray-500 mb-1 block">Bill Number</label><input type="text" id="billNumber" placeholder="Bill / Invoice no." class="input-field w-full p-3 rounded-xl outline-none"></div>
+                <div class="mb-4"><label class="text-xs font-semibold text-gray-500 mb-1 block">Bill Images <span class="text-gray-400 font-normal">(up to 3)</span></label><div class="grid grid-cols-2 gap-2"><label for="billImageCam" class="btn-bounce cursor-pointer flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-blue-300 bg-blue-50 text-blue-700 font-semibold text-sm"><i data-lucide="camera" class="w-4 h-4"></i> Camera</label><label for="billImageGal" class="btn-bounce cursor-pointer flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-blue-300 bg-blue-50 text-blue-700 font-semibold text-sm"><i data-lucide="image" class="w-4 h-4"></i> Gallery</label></div><input id="billImageCam" type="file" accept="image/*" capture="environment" class="hidden" onchange="handlePickupImagePick(this,'bill')"><input id="billImageGal" type="file" accept="image/*" multiple class="hidden" onchange="handlePickupImagePick(this,'bill')"><div id="billImgPreview" class="mt-2"></div><div id="billImgInfo" class="text-[11px] text-gray-500 mt-1">3 images max</div></div>
+                <div class="mb-3"><label class="text-xs font-semibold text-gray-500 mb-1 block">Aadhaar Number</label><input type="text" id="aadhaarNumber" placeholder="12-digit Aadhaar" inputmode="numeric" maxlength="14" class="input-field w-full p-3 rounded-xl outline-none font-mono"></div>
+                <div><label class="text-xs font-semibold text-gray-500 mb-1 block">Aadhaar Images <span class="text-gray-400 font-normal">(up to 3)</span></label><div class="grid grid-cols-2 gap-2"><label for="aadhaarImageCam" class="btn-bounce cursor-pointer flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50 text-indigo-700 font-semibold text-sm"><i data-lucide="camera" class="w-4 h-4"></i> Camera</label><label for="aadhaarImageGal" class="btn-bounce cursor-pointer flex items-center justify-center gap-2 p-3 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50 text-indigo-700 font-semibold text-sm"><i data-lucide="image" class="w-4 h-4"></i> Gallery</label></div><input id="aadhaarImageCam" type="file" accept="image/*" capture="environment" class="hidden" onchange="handlePickupImagePick(this,'aadhaar')"><input id="aadhaarImageGal" type="file" accept="image/*" multiple class="hidden" onchange="handlePickupImagePick(this,'aadhaar')"><div id="aadhaarImgPreview" class="mt-2"></div><div id="aadhaarImgInfo" class="text-[11px] text-gray-500 mt-1">3 images max</div></div>
+            </div>`;
     } else {
         const reasons = (status === 'rejected') ? rejectReasons : rescheduleReasons;
         const isReject = status === 'rejected';
         formTitle.innerText = isReject ? "Rejection Reason" : "Reschedule / Pending";
-        formSubtitle.innerText = isReject ? "Select the most appropriate reason" : "Select reason — 'On the way' means you're heading there";
+        formSubtitle.innerText = isReject ? "Select the most appropriate reason" : "Select reason";
         formIcon.className = `w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br ${isReject ? 'from-red-500 to-rose-600' : 'from-amber-500 to-orange-600'}`;
         formIcon.innerHTML = `<i data-lucide="${isReject ? 'x-circle' : 'clock'}" class="w-7 h-7 text-white"></i>`;
         submitBtn.className = `btn-bounce w-full bg-gradient-to-r ${isReject ? 'from-red-500 to-rose-600' : 'from-amber-500 to-orange-600'} text-white p-4 rounded-2xl font-bold text-lg shadow-xl flex items-center justify-center gap-2`;
-        let reasonsHtml = `
-            <div>
-                <label class="text-xs font-bold text-gray-500 mb-1.5 block">PHONE MODEL *</label>
-                <input type="text" id="phoneModelRejectReschedule" placeholder="e.g., iPhone 12, Samsung S21" class="input-field w-full p-3.5 rounded-xl outline-none">
-            </div>
-            <div class="space-y-2">
-        `;
-        reasons.forEach(r => {
-            reasonsHtml += `
-                <button type="button" onclick="selectReason(this, '${r.text}')" data-reason="${r.text}" class="reason-btn w-full text-left p-3.5 rounded-xl flex items-center gap-3 hover:bg-gray-50">
-                    <div class="icon-wrap w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <i data-lucide="${r.icon}" class="w-4 h-4 text-gray-600"></i>
-                    </div>
-                    <span class="font-medium text-sm">${r.text}</span>
-                </button>
-            `;
-        });
-        reasonsHtml += '</div>';
-        reasonsHtml += '<input type="text" id="otherReason" placeholder="Type your reason here..." class="input-field w-full p-3.5 rounded-xl outline-none hidden mt-3">';
+        let reasonsHtml = `<div><label class="text-xs font-bold text-gray-500 mb-1.5 block">PHONE MODEL *</label><input type="text" id="phoneModelRejectReschedule" placeholder="e.g., iPhone 12" class="input-field w-full p-3.5 rounded-xl outline-none"></div><div class="space-y-2">`;
+        reasons.forEach(r => { reasonsHtml += `<button type="button" onclick="selectReason(this, '${r.text}')" data-reason="${r.text}" class="reason-btn w-full text-left p-3.5 rounded-xl flex items-center gap-3 hover:bg-gray-50"><div class="icon-wrap w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0"><i data-lucide="${r.icon}" class="w-4 h-4 text-gray-600"></i></div><span class="font-medium text-sm">${r.text}</span></button>`; });
+        reasonsHtml += `</div><input type="text" id="otherReason" placeholder="Type your reason here..." class="input-field w-full p-3.5 rounded-xl outline-none hidden mt-3">`;
         formFields.innerHTML = reasonsHtml;
-        setTimeout(() => {
-            const firstBtn = document.querySelector('.reason-btn');
-            if (firstBtn) selectReason(firstBtn, firstBtn.dataset.reason);
-        }, 100);
+        setTimeout(() => { const firstBtn = document.querySelector('.reason-btn'); if (firstBtn) selectReason(firstBtn, firstBtn.dataset.reason); }, 100);
     }
     lucide.createIcons();
     if (status === 'pickup') updateSpecUI();
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// === SECTION 16: SUBMIT DATA ===
+// === SECTION 16: SUBMIT DATA (UNCHANGED — Cashify coins system) ===
 async function submitData() {
-if (!currentUser) {
-showToast('Please login first', 'error');
-return;
-}
-if (currentUser.role !== 'admin') {
-const userSnap = await db.ref('users/' + currentUser.username + '/is_blocked').once('value');
-if (userSnap.val() === true) {
-showToast('🔒 You are blocked for today!', 'error');
-return;
-}
-}
-const orderId = document.getElementById('orderId').value.trim().toUpperCase();
-let existingData = null, exists = false;
-try {
-const existingSnap = await db.ref('pickups/' + orderId).once('value');
-exists = existingSnap.exists();
-if (exists) existingData = existingSnap.val();
-} catch (e) {
-console.error(e);
-showToast('Error checking order', 'error');
-return;
-}
-if (exists && existingData.status === 'rejected' && currentStatus === 'pickup') {
-     const { value: password, isConfirmed } = await Swal.fire({
-         title: '🔐 Admin Password Required',
-         html: `
-             <p class="text-sm text-gray-600 mb-2">This order was previously <span class="text-red-600 font-bold">REJECTED</span>.</p>
-             <p class="text-sm text-gray-600 mb-2">Enter admin password to mark as <span class="text-green-600 font-bold">PICKUP COMPLETED</span>.</p>
-             <p class="text-xs text-gray-400 mt-2">Only admin knows this password.</p>
-         `,
-         input: 'password',
-         inputPlaceholder: 'Enter admin password',
-         inputAttributes: { autocapitalize: 'off', autocorrect: 'off' },
-         showCancelButton: true,
-         confirmButtonColor: '#3b82f6',
-         cancelButtonColor: '#dc2626',
-         confirmButtonText: '✅ Verify & Proceed',
-         cancelButtonText: 'Cancel',
-         allowOutsideClick: false,
-         preConfirm: (input) => { if (!input) { Swal.showValidationMessage('Enter password'); return false; } return input; }
-     });
-     if (!isConfirmed) { showToast('Cancelled', 'error'); return; }
-     if (password !== 'admin123') {
-         Swal.fire({ icon: 'error', title: 'Wrong Password', text: 'Invalid admin password.', confirmButtonColor: '#dc2626' });
-         return;
-     }
-     showToast('✅ Password verified!', 'success');
- }
- if (exists && existingData.status === 'pickup' && currentStatus === 'pickup') {
-     Swal.fire({ icon: 'error', title: 'Already Pickup Completed', text: `Order ${orderId} already marked.`, confirmButtonColor: '#3b82f6' });
-     return;
- }
- const now = new Date();
- const istDateTime = getISTDateTime();
- let dbData = {
-     orderId,
-     status: currentStatus,
-     timestamp: now.toISOString(),
-     timestampIST: istDateTime,
-     date: now.toLocaleDateString('en-IN'),
-     time: now.toLocaleTimeString('en-IN'),
-     agent: currentUser.username
- };
- let whatsappMsg = '';
- if (currentStatus === 'pickup') {
-     const phoneModel = document.getElementById('phoneModel').value.trim();
-     const imei = document.getElementById('imei').value.trim();
-     const value = document.getElementById('value').value.trim();
-     const custName = document.getElementById('custName').value.trim();
-     const coinsRaw = (document.getElementById('coins')?.value || '').trim();
+    if (!currentUser) { showToast('Please login first', 'error'); return; }
+    if (currentUser.role !== 'admin') {
+        const userSnap = await db.ref('users/' + currentUser.username + '/is_blocked').once('value');
+        if (userSnap.val() === true) { showToast('🔒 You are blocked for today!', 'error'); return; }
+    }
+    const orderId = document.getElementById('orderId').value.trim().toUpperCase();
+    let existingData = null, exists = false;
+    try {
+        const existingSnap = await db.ref('pickups/' + orderId).once('value');
+        exists = existingSnap.exists();
+        if (exists) existingData = existingSnap.val();
+    } catch (e) { console.error(e); showToast('Error checking order', 'error'); return; }
 
-     if (!phoneModel || !imei || !value) {
-         Swal.fire({ icon: 'error', title: 'Missing Details', text: 'Fill Model, IMEI, Value', confirmButtonColor: '#3b82f6' });
-         return;
-     }
+    if (exists && existingData.status === 'rejected' && currentStatus === 'pickup') {
+        const { value: password, isConfirmed } = await Swal.fire({
+            title: '🔐 Admin Password Required',
+            html: `<p class="text-sm text-gray-600 mb-2">This order was previously <span class="text-red-600 font-bold">REJECTED</span>.</p><p class="text-sm text-gray-600 mb-2">Enter admin password to mark as <span class="text-green-600 font-bold">PICKUP COMPLETED</span>.</p><p class="text-xs text-gray-400 mt-2">Only admin knows this password.</p>`,
+            input: 'password', inputPlaceholder: 'Enter admin password',
+            inputAttributes: { autocapitalize: 'off', autocorrect: 'off' },
+            showCancelButton: true, confirmButtonColor: '#3b82f6', cancelButtonColor: '#dc2626',
+            confirmButtonText: '✅ Verify & Proceed', cancelButtonText: 'Cancel', allowOutsideClick: false,
+            preConfirm: (input) => { if (!input) { Swal.showValidationMessage('Enter password'); return false; } return input; }
+        });
+        if (!isConfirmed) { showToast('Cancelled', 'error'); return; }
+        if (password !== 'admin123') { Swal.fire({ icon: 'error', title: 'Wrong Password', text: 'Invalid admin password.', confirmButtonColor: '#dc2626' }); return; }
+        showToast('✅ Password verified!', 'success');
+    }
+    if (exists && existingData.status === 'pickup' && currentStatus === 'pickup') { Swal.fire({ icon: 'error', title: 'Already Pickup Completed', text: `Order ${orderId} already marked.`, confirmButtonColor: '#3b82f6' }); return; }
 
-     // 🪙 Coins validation (quantity only)
-     if (coinsRaw === '' || isNaN(parseInt(coinsRaw)) || parseInt(coinsRaw) < 0) {
-         Swal.fire({ icon: 'error', title: 'Missing Coins', text: 'Please enter a valid coins quantity.', confirmButtonColor: '#3b82f6' });
-         const coinsInput = document.getElementById('coins');
-         if (coinsInput) coinsInput.focus();
-         return;
-     }
-     const coinsQty = parseInt(coinsRaw);
+    const now = new Date();
+    const istDateTime = getISTDateTime();
+    let dbData = { orderId, status: currentStatus, timestamp: now.toISOString(), timestampIST: istDateTime, date: now.toLocaleDateString('en-IN'), time: now.toLocaleTimeString('en-IN'), agent: currentUser.username };
+    let whatsappMsg = '';
 
-     dbData.phoneModel = phoneModel;
-     dbData.imei = imei;
-     if (hiddenImei2) dbData.imei2 = hiddenImei2;
-     dbData.value = parseInt(value);
-     dbData.customerName = custName || 'N/A';
-
-     // 🪙 COINS — backend-only calc (rate NEVER exposed to agent)
-     dbData.coins = coinsQty;
-     dbData.coinValueRate = COIN_VALUE;                         // stored for admin/audit
-     dbData.coinTotalValue = coinsQty * COIN_VALUE;             // ₹ value of coins
-     dbData.actualTotalCost = (parseInt(value) || 0) + (coinsQty * COIN_VALUE); // final actual cost
-
-     // ❌ NO COMMISSION FIELDS SET — Flipkart / Cashify commission does not apply on this pickup.
-     // (Admin panel tracks coins separately; agent earnings still come from pickup_incentive rules.)
-
-     if (!selectedRam || !selectedStorage || !selectedNetwork) {
-         const miss = [];
-         if (!selectedRam) miss.push('RAM');
-         if (!selectedStorage) miss.push('Storage');
-         if (!selectedNetwork) miss.push('Network');
-         Swal.fire({
-             icon: 'warning',
-             title: 'Device Specs Required',
-             html: `<p class="text-sm text-gray-600">Please select <b>${miss.join(', ')}</b> before submitting.</p>`,
-             confirmButtonColor: '#3b82f6'
-         });
-         const box = document.getElementById('specSummary');
-         if (box) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
-         return;
-     }
-     dbData.ram = selectedRam;
-     dbData.storage = selectedStorage;
-     dbData.ramStorage = selectedRam + '/' + selectedStorage;
-     dbData.networkType = selectedNetwork;
-     const _billNo = (document.getElementById('billNumber')?.value || '').trim();
-     const _aadNo  = (document.getElementById('aadhaarNumber')?.value || '').trim();
-     if (_billNo) dbData.billNumber = _billNo;
-     if (_aadNo)  dbData.aadhaarNumber = _aadNo;
-     if (pickupBillImages.length) {
-         Swal.fire({ title: 'Uploading Bill Images...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-         const billUrls = [];
-         for (let i = 0; i < pickupBillImages.length; i++) {
-             try {
-                 const blob = await (await fetch(pickupBillImages[i])).blob();
-                 const fileName = `${orderId}_bill_${i}_${Date.now()}.jpg`;
-                 const storageRef = storage.ref(`pickup_docs/${orderId}/bill/${fileName}`);
-                 const snapshot = await storageRef.put(blob, { contentType: 'image/jpeg' });
-                 const downloadURL = await snapshot.ref.getDownloadURL();
-                 billUrls.push(downloadURL);
-             } catch (e) {
-                 console.error('Bill image upload failed:', e);
-                 Swal.close();
-                 showToast('❌ Bill image upload failed', 'error');
-                 return;
-             }
-         }
-         dbData.billImages = billUrls;
-         dbData.billImage = billUrls[0];
-         Swal.close();
-     }
-     if (pickupAadhaarImages.length) {
-         Swal.fire({ title: 'Uploading Aadhaar Images...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-         const aadhaarUrls = [];
-         for (let i = 0; i < pickupAadhaarImages.length; i++) {
-             try {
-                 const blob = await (await fetch(pickupAadhaarImages[i])).blob();
-                 const fileName = `${orderId}_aadhaar_${i}_${Date.now()}.jpg`;
-                 const storageRef = storage.ref(`pickup_docs/${orderId}/aadhaar/${fileName}`);
-                 const snapshot = await storageRef.put(blob, { contentType: 'image/jpeg' });
-                 const downloadURL = await snapshot.ref.getDownloadURL();
-                 aadhaarUrls.push(downloadURL);
-             } catch (e) {
-                 console.error('Aadhaar image upload failed:', e);
-                 Swal.close();
-                 showToast('❌ Aadhaar image upload failed', 'error');
-                 return;
-             }
-         }
-         dbData.aadhaarImages = aadhaarUrls;
-         dbData.aadhaarImage = aadhaarUrls[0];
-         Swal.close();
-     }
-
-     // 📱 WhatsApp message — NO coins, NO total cost (as required)
-     whatsappMsg = `Order ID: ${orderId}\nStatus: Pickup Completed`;
- } else {
-     const phoneModel = document.getElementById('phoneModelRejectReschedule').value.trim();
-     if (!phoneModel) {
-         Swal.fire({ icon: 'error', title: 'Missing Model', text: 'Enter phone model', confirmButtonColor: '#3b82f6' });
-         return;
-     }
-     dbData.phoneModel = phoneModel;
-     let reason = selectedReason;
-     if (reason.toLowerCase().includes('other')) {
-         reason = document.getElementById('otherReason').value.trim();
-         if (!reason) {
-             Swal.fire({ icon: 'warning', title: 'Reason Required', text: 'Type the reason', confirmButtonColor: '#3b82f6' });
-             return;
-         }
-     }
-     if (!reason) {
-         Swal.fire({ icon: 'warning', title: 'Select Reason', text: 'Choose a reason', confirmButtonColor: '#3b82f6' });
-         return;
-     }
-     dbData.reason = reason;
-     
-     if (currentStatus === 'rejected') {
-         whatsappMsg = `Order ID: ${orderId}\nModel: ${dbData.phoneModel}\nReason: ${dbData.reason}\nStatus: Rejected`;
-         dbData.incentive_approved = false;
-         dbData.incentive_paid = false;
-     } else {
-         whatsappMsg = `Order ID: ${orderId}\nModel: ${dbData.phoneModel}\nReason: ${dbData.reason}\nStatus: Rescheduled`;
-     }
- }
- if (currentStatus === 'reschedule') {
-     try {
-         const pendingSnap = await db.ref('pending/' + orderId).once('value');
-         if (pendingSnap.exists()) {
-             const existingReason = pendingSnap.val().reason || '';
-             if (existingReason !== dbData.reason) {
-                 const r = await Swal.fire({
-                     title: 'Change Reason?',
-                     text: `Existing: "${existingReason}". Update to "${dbData.reason}"?`,
-                     icon: 'question',
-                     showCancelButton: true,
-                     confirmButtonColor: '#f59e0b',
-                     confirmButtonText: 'Update',
-                     cancelButtonText: 'Cancel'
-                 });
-                 if (!r.isConfirmed) { showToast('Cancelled', 'error'); return; }
-             }
-         }
-     } catch (e) { console.error(e); }
- }
- Swal.fire({ title: 'Saving...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
- try {
-     if (exists) await db.ref('pickups/' + orderId).update(dbData);
-     else await db.ref('pickups/' + orderId).set(dbData);
-     if (currentStatus === 'pickup' || currentStatus === 'rejected') {
-         const pendingSnap = await db.ref('pending/' + orderId).once('value');
-         if (pendingSnap.exists()) {
-             await db.ref('pending/' + orderId).remove();
-             await loadPendingOrders();
-         }
-     }
-     if (currentStatus === 'reschedule') {
-         const pendingData = {
-             orderId,
-             phoneModel: dbData.phoneModel,
-             reason: dbData.reason || selectedReason,
-             status: 'reschedule',
-             timestamp: now.toISOString(),
-             timestampIST: istDateTime,
-             agent: currentUser.username
-         };
-         await db.ref('pending/' + orderId).set(pendingData);
-         await loadPendingOrders();
-     }
-
-     // ================================================================
-     // 🔥 Cashify branding header + Pickup details card for the
-     //    WhatsApp confirmation dialog.
-     //    ⚠️ Coin ₹ value, per-coin rate, and total cost are HIDDEN.
-     // ================================================================
-     const cashifyHeaderHtml = `
-         <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #e0e7ff;">
-             <div style="width:28px;height:28px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#4f46e5,#7c3aed);box-shadow:0 4px 12px rgba(79,70,229,0.3);">
-                 <svg width="16" height="16" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                     <g stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
-                         <path d="M22 18a14 14 0 0 1 20 0"/>
-                         <path d="M44 22l-2-4 -4 2"/>
-                         <path d="M42 46a14 14 0 0 1 -20 0"/>
-                         <path d="M20 42l2 4 4 -2"/>
-                     </g>
-                     <rect x="24" y="22" width="16" height="20" rx="3.5" fill="#ffffff"/>
-                 </svg>
-             </div>
-             <span style="font-size:18px;font-weight:900;letter-spacing:-0.5px;background:linear-gradient(135deg,#1e1b4b,#4f46e5 60%,#7c3aed);-webkit-background-clip:text;background-clip:text;color:transparent;">Cashify<span style="color:#22d3ee;-webkit-text-fill-color:#22d3ee;">.</span></span>
-         </div>
-     `;
-
-     let pickupInfoHtml = '';
-     if (currentStatus === 'pickup') {
-         // Only basic required info shown. Coins shown as quantity only.
-         pickupInfoHtml = `
-             <div style="text-align:left;background:linear-gradient(135deg,#eef2ff 0%,#e0e7ff 100%);border:1px solid #c7d2fe;border-radius:14px;padding:12px 14px;margin-bottom:12px;">
-                 <div style="font-size:10px;font-weight:900;color:#4338ca;letter-spacing:1.5px;margin-bottom:8px;">📦 PICKUP CONFIRMATION</div>
-                 <div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;border-bottom:1px dashed #c7d2fe;">
-                     <span style="color:#6b7280;font-weight:600;">Device</span>
-                     <span style="color:#111827;font-weight:800;text-align:right;">${dbData.phoneModel || '—'}</span>
-                 </div>
-                 <div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;border-bottom:1px dashed #c7d2fe;">
-                     <span style="color:#6b7280;font-weight:600;">IMEI</span>
-                     <span style="color:#111827;font-weight:700;font-family:ui-monospace,Menlo,monospace;font-size:11px;text-align:right;word-break:break-all;">${dbData.imei || '—'}</span>
-                 </div>
-                 <div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;border-bottom:1px dashed #c7d2fe;">
-                     <span style="color:#6b7280;font-weight:600;">RAM / Storage</span>
-                     <span style="color:#111827;font-weight:800;text-align:right;">${dbData.ramStorage || '—'}</span>
-                 </div>
-                 <div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;${dbData.customerName && dbData.customerName !== 'N/A' ? 'border-bottom:1px dashed #c7d2fe;' : ''}">
-                     <span style="color:#6b7280;font-weight:600;">Network</span>
-                     <span style="color:#111827;font-weight:800;text-align:right;">${dbData.networkType || '—'}</span>
-                 </div>
-                 ${dbData.customerName && dbData.customerName !== 'N/A' ? `
-                 <div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;border-bottom:1px dashed #c7d2fe;">
-                     <span style="color:#6b7280;font-weight:600;">Customer</span>
-                     <span style="color:#111827;font-weight:800;text-align:right;">${dbData.customerName}</span>
-                 </div>` : ''}
-                 <div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;border-bottom:1px dashed #c7d2fe;">
-                     <span style="color:#6b7280;font-weight:600;">Agreed Value</span>
-                     <span style="color:#047857;font-weight:900;font-size:14px;">₹${Number(dbData.value).toLocaleString('en-IN')}</span>
-                 </div>
-                 <div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:6px 0 2px;">
-                     <span style="color:#6b7280;font-weight:600;">Coins</span>
-                     <span style="color:#111827;font-weight:900;font-size:14px;">${dbData.coins} 🪙</span>
-                 </div>
-             </div>
-         `;
-     }
-
-     const result = await Swal.fire({
-         icon: 'success',
-         title: '✅ Saved!',
-         html: `
-             ${cashifyHeaderHtml}
-             ${pickupInfoHtml}
-             <p class="text-sm text-gray-600 mb-2">📊 Firebase me time save ho gaya:</p>
-             <div class="text-left bg-blue-50 p-2 rounded-lg text-xs font-mono mb-3">${istDateTime}</div>
-             <p class="text-sm text-gray-600 mb-2">📱 WhatsApp message preview:</p>
-             <div class="text-left bg-gray-50 p-3 rounded-lg text-xs font-mono whitespace-pre-wrap">${whatsappMsg}</div>
-         `,
-         showCancelButton: true,
-         showDenyButton: true,
-         confirmButtonText: '📤 Open WhatsApp',
-         denyButtonText: '📋 Copy Message',
-         cancelButtonText: 'Close',
-         confirmButtonColor: '#25D366',
-         denyButtonColor: '#3b82f6'
-     });
-     if (result.isConfirmed) {
-         window.open(`https://wa.me/?text=${encodeURIComponent(whatsappMsg)}`, '_blank');
-     } else if (result.isDenied) {
-         try {
-             await navigator.clipboard.writeText(whatsappMsg);
-             showToast('✅ Copied!', 'success');
-         } catch (e) {
-             const ta = document.createElement('textarea');
-             ta.value = whatsappMsg;
-             document.body.appendChild(ta);
-             ta.select();
-             document.execCommand('copy');
-             document.body.removeChild(ta);
-             showToast('✅ Copied!', 'success');
-         }
-     }
-     document.getElementById('orderId').value = '';
-     hiddenImei2 = '';
-     goBack();
-     loadTodayStats();
-     loadPendingOrders();
- } catch (error) {
-     Swal.fire({ icon: 'error', title: 'Error', text: error.message });
- }
+    if (currentStatus === 'pickup') {
+        const phoneModel = document.getElementById('phoneModel').value.trim();
+        const imei = document.getElementById('imei').value.trim();
+        const value = document.getElementById('value').value.trim();
+        const custName = document.getElementById('custName').value.trim();
+        const coinsRaw = (document.getElementById('coins')?.value || '').trim();
+        if (!phoneModel || !imei || !value) { Swal.fire({ icon: 'error', title: 'Missing Details', text: 'Fill Model, IMEI, Value', confirmButtonColor: '#3b82f6' }); return; }
+        if (coinsRaw === '' || isNaN(parseInt(coinsRaw)) || parseInt(coinsRaw) < 0) { Swal.fire({ icon: 'error', title: 'Missing Coins', text: 'Please enter a valid coins quantity.', confirmButtonColor: '#3b82f6' }); const coinsInput = document.getElementById('coins'); if (coinsInput) coinsInput.focus(); return; }
+        const coinsQty = parseInt(coinsRaw);
+        dbData.phoneModel = phoneModel;
+        dbData.imei = imei;
+        if (hiddenImei2) dbData.imei2 = hiddenImei2;
+        dbData.value = parseInt(value);
+        dbData.customerName = custName || 'N/A';
+        dbData.coins = coinsQty;
+        dbData.coinValueRate = COIN_VALUE;
+        dbData.coinTotalValue = coinsQty * COIN_VALUE;
+        dbData.actualTotalCost = (parseInt(value) || 0) + (coinsQty * COIN_VALUE);
+        if (!selectedRam || !selectedStorage || !selectedNetwork) {
+            const miss = [];
+            if (!selectedRam) miss.push('RAM');
+            if (!selectedStorage) miss.push('Storage');
+            if (!selectedNetwork) miss.push('Network');
+            Swal.fire({ icon: 'warning', title: 'Device Specs Required', html: `<p class="text-sm text-gray-600">Please select <b>${miss.join(', ')}</b> before submitting.</p>`, confirmButtonColor: '#3b82f6' });
+            const box = document.getElementById('specSummary'); if (box) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
+        }
+        dbData.ram = selectedRam; dbData.storage = selectedStorage; dbData.ramStorage = selectedRam + '/' + selectedStorage; dbData.networkType = selectedNetwork;
+        const _billNo = (document.getElementById('billNumber')?.value || '').trim();
+        const _aadNo = (document.getElementById('aadhaarNumber')?.value || '').trim();
+        if (_billNo) dbData.billNumber = _billNo;
+        if (_aadNo) dbData.aadhaarNumber = _aadNo;
+        if (pickupBillImages.length) {
+            Swal.fire({ title: 'Uploading Bill Images...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            const billUrls = [];
+            for (let i = 0; i < pickupBillImages.length; i++) {
+                try {
+                    const blob = await (await fetch(pickupBillImages[i])).blob();
+                    const fileName = `${orderId}_bill_${i}_${Date.now()}.jpg`;
+                    const storageRef = storage.ref(`pickup_docs/${orderId}/bill/${fileName}`);
+                    const snapshot = await storageRef.put(blob, { contentType: 'image/jpeg' });
+                    billUrls.push(await snapshot.ref.getDownloadURL());
+                } catch (e) { console.error('Bill image upload failed:', e); Swal.close(); showToast('❌ Bill image upload failed', 'error'); return; }
+            }
+            dbData.billImages = billUrls; dbData.billImage = billUrls[0]; Swal.close();
+        }
+        if (pickupAadhaarImages.length) {
+            Swal.fire({ title: 'Uploading Aadhaar Images...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            const aadhaarUrls = [];
+            for (let i = 0; i < pickupAadhaarImages.length; i++) {
+                try {
+                    const blob = await (await fetch(pickupAadhaarImages[i])).blob();
+                    const fileName = `${orderId}_aadhaar_${i}_${Date.now()}.jpg`;
+                    const storageRef = storage.ref(`pickup_docs/${orderId}/aadhaar/${fileName}`);
+                    const snapshot = await storageRef.put(blob, { contentType: 'image/jpeg' });
+                    aadhaarUrls.push(await snapshot.ref.getDownloadURL());
+                } catch (e) { console.error('Aadhaar image upload failed:', e); Swal.close(); showToast('❌ Aadhaar image upload failed', 'error'); return; }
+            }
+            dbData.aadhaarImages = aadhaarUrls; dbData.aadhaarImage = aadhaarUrls[0]; Swal.close();
+        }
+        whatsappMsg = `Order ID: ${orderId}\nStatus: Pickup Completed`;
+    } else {
+        const phoneModel = document.getElementById('phoneModelRejectReschedule').value.trim();
+        if (!phoneModel) { Swal.fire({ icon: 'error', title: 'Missing Model', text: 'Enter phone model', confirmButtonColor: '#3b82f6' }); return; }
+        dbData.phoneModel = phoneModel;
+        let reason = selectedReason;
+        if (reason.toLowerCase().includes('other')) { reason = document.getElementById('otherReason').value.trim(); if (!reason) { Swal.fire({ icon: 'warning', title: 'Reason Required', text: 'Type the reason', confirmButtonColor: '#3b82f6' }); return; } }
+        if (!reason) { Swal.fire({ icon: 'warning', title: 'Select Reason', text: 'Choose a reason', confirmButtonColor: '#3b82f6' }); return; }
+        dbData.reason = reason;
+        if (currentStatus === 'rejected') { whatsappMsg = `Order ID: ${orderId}\nModel: ${dbData.phoneModel}\nReason: ${dbData.reason}\nStatus: Rejected`; dbData.incentive_approved = false; dbData.incentive_paid = false; }
+        else { whatsappMsg = `Order ID: ${orderId}\nModel: ${dbData.phoneModel}\nReason: ${dbData.reason}\nStatus: Rescheduled`; }
+    }
+    if (currentStatus === 'reschedule') {
+        try {
+            const pendingSnap = await db.ref('pending/' + orderId).once('value');
+            if (pendingSnap.exists()) {
+                const existingReason = pendingSnap.val().reason || '';
+                if (existingReason !== dbData.reason) {
+                    const r = await Swal.fire({ title: 'Change Reason?', text: `Existing: "${existingReason}". Update to "${dbData.reason}"?`, icon: 'question', showCancelButton: true, confirmButtonColor: '#f59e0b', confirmButtonText: 'Update', cancelButtonText: 'Cancel' });
+                    if (!r.isConfirmed) { showToast('Cancelled', 'error'); return; }
+                }
+            }
+        } catch (e) { console.error(e); }
+    }
+    Swal.fire({ title: 'Saving...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    try {
+        if (exists) await db.ref('pickups/' + orderId).update(dbData);
+        else await db.ref('pickups/' + orderId).set(dbData);
+        if (currentStatus === 'pickup' || currentStatus === 'rejected') {
+            const pendingSnap = await db.ref('pending/' + orderId).once('value');
+            if (pendingSnap.exists()) { await db.ref('pending/' + orderId).remove(); await loadPendingOrders(); }
+        }
+        if (currentStatus === 'reschedule') {
+            const pendingData = { orderId, phoneModel: dbData.phoneModel, reason: dbData.reason || selectedReason, status: 'reschedule', timestamp: now.toISOString(), timestampIST: istDateTime, agent: currentUser.username };
+            await db.ref('pending/' + orderId).set(pendingData);
+            await loadPendingOrders();
+        }
+        const cashifyHeaderHtml = `
+            <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #e0e7ff;">
+                <div style="width:28px;height:28px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#4f46e5,#7c3aed);box-shadow:0 4px 12px rgba(79,70,229,0.3);">
+                    <svg width="16" height="16" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><g stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 18a14 14 0 0 1 20 0"/><path d="M44 22l-2-4 -4 2"/><path d="M42 46a14 14 0 0 1 -20 0"/><path d="M20 42l2 4 4 -2"/></g><rect x="24" y="22" width="16" height="20" rx="3.5" fill="#ffffff"/></svg>
+                </div>
+                <span style="font-size:18px;font-weight:900;letter-spacing:-0.5px;background:linear-gradient(135deg,#1e1b4b,#4f46e5 60%,#7c3aed);-webkit-background-clip:text;background-clip:text;color:transparent;">Cashify<span style="color:#22d3ee;-webkit-text-fill-color:#22d3ee;">.</span></span>
+            </div>`;
+        let pickupInfoHtml = '';
+        if (currentStatus === 'pickup') {
+            pickupInfoHtml = `
+                <div style="text-align:left;background:linear-gradient(135deg,#eef2ff 0%,#e0e7ff 100%);border:1px solid #c7d2fe;border-radius:14px;padding:12px 14px;margin-bottom:12px;">
+                    <div style="font-size:10px;font-weight:900;color:#4338ca;letter-spacing:1.5px;margin-bottom:8px;">📦 PICKUP CONFIRMATION</div>
+                    <div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;border-bottom:1px dashed #c7d2fe;"><span style="color:#6b7280;font-weight:600;">Device</span><span style="color:#111827;font-weight:800;text-align:right;">${dbData.phoneModel || '—'}</span></div>
+                    <div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;border-bottom:1px dashed #c7d2fe;"><span style="color:#6b7280;font-weight:600;">IMEI</span><span style="color:#111827;font-weight:700;font-family:ui-monospace,Menlo,monospace;font-size:11px;text-align:right;word-break:break-all;">${dbData.imei || '—'}</span></div>
+                    <div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;border-bottom:1px dashed #c7d2fe;"><span style="color:#6b7280;font-weight:600;">RAM / Storage</span><span style="color:#111827;font-weight:800;text-align:right;">${dbData.ramStorage || '—'}</span></div>
+                    <div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;${dbData.customerName && dbData.customerName !== 'N/A' ? 'border-bottom:1px dashed #c7d2fe;' : ''}"><span style="color:#6b7280;font-weight:600;">Network</span><span style="color:#111827;font-weight:800;text-align:right;">${dbData.networkType || '—'}</span></div>
+                    ${dbData.customerName && dbData.customerName !== 'N/A' ? `<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;border-bottom:1px dashed #c7d2fe;"><span style="color:#6b7280;font-weight:600;">Customer</span><span style="color:#111827;font-weight:800;text-align:right;">${dbData.customerName}</span></div>` : ''}
+                    <div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;border-bottom:1px dashed #c7d2fe;"><span style="color:#6b7280;font-weight:600;">Agreed Value</span><span style="color:#047857;font-weight:900;font-size:14px;">₹${Number(dbData.value).toLocaleString('en-IN')}</span></div>
+                    <div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:6px 0 2px;"><span style="color:#6b7280;font-weight:600;">Coins</span><span style="color:#111827;font-weight:900;font-size:14px;">${dbData.coins} 🪙</span></div>
+                </div>`;
+        }
+        const result = await Swal.fire({
+            icon: 'success', title: '✅ Saved!',
+            html: `${cashifyHeaderHtml}${pickupInfoHtml}<p class="text-sm text-gray-600 mb-2">📊 Firebase me time save ho gaya:</p><div class="text-left bg-blue-50 p-2 rounded-lg text-xs font-mono mb-3">${istDateTime}</div><p class="text-sm text-gray-600 mb-2">📱 WhatsApp message preview:</p><div class="text-left bg-gray-50 p-3 rounded-lg text-xs font-mono whitespace-pre-wrap">${whatsappMsg}</div>`,
+            showCancelButton: true, showDenyButton: true, confirmButtonText: '📤 Open WhatsApp', denyButtonText: '📋 Copy Message', cancelButtonText: 'Close',
+            confirmButtonColor: '#25D366', denyButtonColor: '#3b82f6'
+        });
+        if (result.isConfirmed) { window.open(`https://wa.me/?text=${encodeURIComponent(whatsappMsg)}`, '_blank'); }
+        else if (result.isDenied) {
+            try { await navigator.clipboard.writeText(whatsappMsg); showToast('✅ Copied!', 'success'); }
+            catch (e) { const ta = document.createElement('textarea'); ta.value = whatsappMsg; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); showToast('✅ Copied!', 'success'); }
+        }
+        document.getElementById('orderId').value = ''; hiddenImei2 = '';
+        goBack(); loadTodayStats(); loadPendingOrders();
+    } catch (error) { Swal.fire({ icon: 'error', title: 'Error', text: error.message }); }
 }
 
 // === SECTION 17: SCANNER FUNCTIONS (Barcode + OCR) ===
 function setScanMode(mode) {
     scanMode = mode;
-    document.querySelectorAll('#scanModeToggle button').forEach(b => {
-        b.classList.toggle('active', b.dataset.mode === mode);
-    });
+    document.querySelectorAll('#scanModeToggle button').forEach(b => { b.classList.toggle('active', b.dataset.mode === mode); });
     const hint = document.getElementById('scanHint');
     const tip = document.getElementById('scanTip');
     const captureBtn = document.getElementById('captureBtn');
@@ -1548,18 +977,9 @@ async function initTesseract() {
     if (typeof Tesseract === 'undefined') { console.warn('Tesseract not loaded'); return null; }
     try {
         const worker = await Tesseract.createWorker('eng', 1, {
-            logger: m => {
-                if (m.status === 'recognizing text') {
-                    const pct = Math.round(m.progress * 100);
-                    document.getElementById('ocrProgressBar').style.width = pct + '%';
-                }
-            }
+            logger: m => { if (m.status === 'recognizing text') { document.getElementById('ocrProgressBar').style.width = Math.round(m.progress * 100) + '%'; } }
         });
-        await worker.setParameters({
-            tessedit_char_whitelist: '0123456789IMEI: ',
-            tessedit_pageseg_mode: '6',
-            tessedit_ocr_engine_mode: '3'
-        });
+        await worker.setParameters({ tessedit_char_whitelist: '0123456789IMEI: ', tessedit_pageseg_mode: '6', tessedit_ocr_engine_mode: '3' });
         return worker;
     } catch (e) { console.error(e); return null; }
 }
@@ -1570,8 +990,7 @@ async function startScanner() {
     const statusText = document.getElementById('scanStatusText');
     const spinner = document.getElementById('scanSpinner');
     modal.classList.remove('hidden');
-    statusText.textContent = '🔄 Starting camera...';
-    spinner.style.display = 'inline-block';
+    statusText.textContent = '🔄 Starting camera...'; spinner.style.display = 'inline-block';
     lucide.createIcons();
     document.getElementById('imeiResult').classList.remove('show');
     document.getElementById('ocrProgress').style.display = 'none';
@@ -1580,40 +999,23 @@ async function startScanner() {
     try {
         if (typeof ZXing === 'undefined' || !ZXing.BrowserMultiFormatReader) throw new Error('ZXing not loaded');
         const hints = new Map();
-        const formats = [
-            ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39,
-            ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8,
-            ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E,
-            ZXing.BarcodeFormat.ITF, ZXing.BarcodeFormat.QR_CODE,
-            ZXing.BarcodeFormat.DATA_MATRIX, ZXing.BarcodeFormat.CODE_93
-        ];
+        const formats = [ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.CODE_39, ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8, ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.UPC_E, ZXing.BarcodeFormat.ITF, ZXing.BarcodeFormat.QR_CODE, ZXing.BarcodeFormat.DATA_MATRIX, ZXing.BarcodeFormat.CODE_93];
         hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
         hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
         hints.set(ZXing.DecodeHintType.CHARACTER_SET, 'UTF-8');
         zxingCodeReader = new ZXing.BrowserMultiFormatReader(hints);
         const devices = await zxingCodeReader.listVideoInputDevices();
         let deviceId = null;
-        for (const d of devices) {
-            if (d.label && /back|rear|environment/i.test(d.label)) {
-                deviceId = d.deviceId;
-                break;
-            }
-        }
+        for (const d of devices) { if (d.label && /back|rear|environment/i.test(d.label)) { deviceId = d.deviceId; break; } }
         if (!deviceId && devices.length > 0) deviceId = devices[devices.length - 1].deviceId;
         statusText.textContent = '📷 Camera ready';
-        await zxingCodeReader.decodeFromVideoDevice(
-            deviceId,
-            'scanVideo',
-            (result, err) => {
-                if (result && scanMode === 'barcode') {
-                    const raw = result.getText();
-                    const imeis = extractIMEIs(raw);
-                    if (imeis.imei1 && imeis.imei1.length >= 14) onScanSuccess(imeis.imei1, imeis.imei2);
-                } else if (err && !(err instanceof ZXing.NotFoundException)) {
-                    console.error(err);
-                }
-            }
-        );
+        await zxingCodeReader.decodeFromVideoDevice(deviceId, 'scanVideo', (result, err) => {
+            if (result && scanMode === 'barcode') {
+                const raw = result.getText();
+                const imeis = extractIMEIs(raw);
+                if (imeis.imei1 && imeis.imei1.length >= 14) onScanSuccess(imeis.imei1, imeis.imei2);
+            } else if (err && !(err instanceof ZXing.NotFoundException)) { console.error(err); }
+        });
         isScanning = true;
         statusText.textContent = scanMode === 'barcode' ? '🎯 Scanning...' : '📱 Ready';
         spinner.style.display = 'none';
@@ -1622,12 +1024,9 @@ async function startScanner() {
             document.getElementById('captureBtn').disabled = false;
             document.getElementById('captureBtn').innerHTML = '<i data-lucide="camera"></i> Capture & Read IMEI';
             lucide.createIcons();
-        } else {
-            document.getElementById('captureBtn').style.display = 'none';
-        }
+        } else { document.getElementById('captureBtn').style.display = 'none'; }
     } catch (err) {
-        console.error(err);
-        stopScanner();
+        console.error(err); stopScanner();
         let msg = 'Camera access failed';
         if (err.name === 'NotAllowedError') msg = 'Allow camera permission';
         else if (err.name === 'NotFoundError') msg = 'No camera found';
@@ -1638,34 +1037,25 @@ async function startScanner() {
 
 async function startOCRScanning() {
     if (scanMode !== 'ocr' || isOcrScanning) return;
-    if (!tesseractWorker) {
-        showToast('⏳ Initializing OCR...', 'info');
-        tesseractWorker = await initTesseract();
-        if (!tesseractWorker) { showToast('❌ OCR failed', 'error'); return; }
-    }
+    if (!tesseractWorker) { showToast('⏳ Initializing OCR...', 'info'); tesseractWorker = await initTesseract(); if (!tesseractWorker) { showToast('❌ OCR failed', 'error'); return; } }
     const video = document.getElementById('scanVideo');
     if (!video.videoWidth) { showToast('⏳ Camera not ready', 'error'); return; }
-    isOcrScanning = true;
-    lastDetectedImei = '';
-    ocrAttemptCount = 0;
+    isOcrScanning = true; lastDetectedImei = ''; ocrAttemptCount = 0;
     const captureBtn = document.getElementById('captureBtn');
     captureBtn.disabled = true;
     captureBtn.innerHTML = '<span class="spinner" style="width:20px;height:20px;border-width:2px;"></span> Scanning...';
     const statusText = document.getElementById('scanStatusText');
     const progress = document.getElementById('ocrProgress');
     const progressBar = document.getElementById('ocrProgressBar');
-    progress.style.display = 'block';
-    progressBar.style.width = '0%';
+    progress.style.display = 'block'; progressBar.style.width = '0%';
     statusText.textContent = '📸 Capturing...';
-
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     const maxW = 800;
     const scale = Math.min(1, maxW / video.videoWidth);
     canvas.width = Math.round(video.videoWidth * scale);
     canvas.height = Math.round(video.videoHeight * scale);
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const d = imgData.data;
@@ -1676,19 +1066,13 @@ async function startOCRScanning() {
         d[i] = d[i + 1] = d[i + 2] = val;
     }
     ctx.putImageData(imgData, 0, 0);
-
     try {
         const { data: { text } } = await tesseractWorker.recognize(canvas);
         const imeis = extractIMEIs(text);
-        if (imeis.imei1 && imeis.imei1.length >= 14) {
-            handleImeiFound(imeis.imei1, imeis.imei2);
-            return;
-        }
+        if (imeis.imei1 && imeis.imei1.length >= 14) { handleImeiFound(imeis.imei1, imeis.imei2); return; }
     } catch (e) { console.error(e); }
-
     statusText.textContent = '🔍 Scanning in background...';
-    progressBar.style.width = '0%';
-    ocrAttemptCount = 0;
+    progressBar.style.width = '0%'; ocrAttemptCount = 0;
     if (ocrInterval) clearInterval(ocrInterval);
     ocrInterval = setInterval(async () => {
         if (!isScanning || !isOcrScanning) { stopOCRScanning(); return; }
@@ -1698,10 +1082,8 @@ async function startOCRScanning() {
         const ctx2 = c2.getContext('2d');
         const maxW2 = 640;
         const scale2 = Math.min(1, maxW2 / video.videoWidth);
-        c2.width = Math.round(video.videoWidth * scale2);
-        c2.height = Math.round(video.videoHeight * scale2);
-        ctx2.imageSmoothingEnabled = true;
-        ctx2.imageSmoothingQuality = 'high';
+        c2.width = Math.round(video.videoWidth * scale2); c2.height = Math.round(video.videoHeight * scale2);
+        ctx2.imageSmoothingEnabled = true; ctx2.imageSmoothingQuality = 'high';
         ctx2.drawImage(video, 0, 0, c2.width, c2.height);
         const imgData2 = ctx2.getImageData(0, 0, c2.width, c2.height);
         const d2 = imgData2.data;
@@ -1716,26 +1098,20 @@ async function startOCRScanning() {
         try {
             const { data: { text } } = await tesseractWorker.recognize(c2);
             const imeis = extractIMEIs(text);
-            if (imeis.imei1 && imeis.imei1.length >= 14) {
-                handleImeiFound(imeis.imei1, imeis.imei2);
-                return;
-            }
+            if (imeis.imei1 && imeis.imei1.length >= 14) { handleImeiFound(imeis.imei1, imeis.imei2); return; }
         } catch (e) { console.error(e); }
     }, 1500);
 }
 
+// 🔥 Modified: routes to correct input based on scannerTarget
 function handleImeiFound(imei1, imei2) {
     if (!isOcrScanning && !isScanning) return;
     if (imei1 === lastDetectedImei) return;
     lastDetectedImei = imei1;
     document.getElementById('imeiResultText').textContent = '✅ IMEI: ' + imei1 + (imei2 ? ' | IMEI2 captured' : '');
     document.getElementById('imeiResult').classList.add('show');
-    const imeiInput = document.getElementById('imei');
-    if (imeiInput) {
-        imeiInput.value = imei1;
-        imeiInput.classList.add('flash-green');
-        setTimeout(() => imeiInput.classList.remove('flash-green'), 500);
-    }
+    const targetInput = scannerTarget === 'outside' ? document.getElementById('opImei') : document.getElementById('imei');
+    if (targetInput) { targetInput.value = imei1; targetInput.classList.add('flash-green'); setTimeout(() => targetInput.classList.remove('flash-green'), 500); }
     if (imei2) hiddenImei2 = imei2;
     if (navigator.vibrate) navigator.vibrate([80, 50, 80]);
     document.getElementById('scanStatusText').textContent = '✅ IMEI captured!';
@@ -1748,8 +1124,7 @@ function stopOCRScanning() {
     isOcrScanning = false;
     if (ocrInterval) { clearInterval(ocrInterval); ocrInterval = null; }
     const captureBtn = document.getElementById('captureBtn');
-    captureBtn.disabled = false;
-    captureBtn.innerHTML = '<i data-lucide="camera"></i> Capture & Read IMEI';
+    if (captureBtn) { captureBtn.disabled = false; captureBtn.innerHTML = '<i data-lucide="camera"></i> Capture & Read IMEI'; }
     lucide.createIcons();
     document.getElementById('ocrProgress').style.display = 'none';
     document.getElementById('ocrProgressBar').style.width = '0%';
@@ -1760,14 +1135,7 @@ function isValidIMEI(imei) {
     if (!/^\d{15}$/.test(imei)) return false;
     if (!/^[3-9]/.test(imei)) return false;
     let sum = 0;
-    for (let i = 0; i < 15; i++) {
-        let digit = parseInt(imei[i]);
-        if (i % 2 === 1) {
-            digit *= 2;
-            if (digit > 9) digit -= 9;
-        }
-        sum += digit;
-    }
+    for (let i = 0; i < 15; i++) { let digit = parseInt(imei[i]); if (i % 2 === 1) { digit *= 2; if (digit > 9) digit -= 9; } sum += digit; }
     return sum % 10 === 0;
 }
 
@@ -1776,41 +1144,23 @@ function extractIMEIs(text) {
     let clean = text.replace(/[Oo]/g,'0').replace(/[Ss]/g,'5').replace(/[Bb]/g,'8').replace(/[Zz]/g,'2').replace(/[Gg]/g,'6').replace(/[Tt]/g,'7').replace(/[Ll]/g,'1').replace(/\s+/g,' ').trim();
     const all15Digits = clean.match(/\d{15}/g) || [];
     const all14Digits = clean.match(/\d{14}/g) || [];
-    for (let num of all15Digits) {
-        if (/^[3-9]/.test(num) && isValidIMEI(num)) candidates.push(num);
-    }
-    const imeiPatterns = [
-        /IMEI\s*1\s*[:\-]?\s*(\d{15})/i,
-        /IMEI\s*[:\-]?\s*(\d{15})/i,
-        /IMEI1\s*[:\-]?\s*(\d{15})/i,
-        /IMEI2\s*[:\-]?\s*(\d{15})/i
-    ];
+    for (let num of all15Digits) { if (/^[3-9]/.test(num) && isValidIMEI(num)) candidates.push(num); }
+    const imeiPatterns = [/IMEI\s*1\s*[:\-]?\s*(\d{15})/i, /IMEI\s*[:\-]?\s*(\d{15})/i, /IMEI1\s*[:\-]?\s*(\d{15})/i, /IMEI2\s*[:\-]?\s*(\d{15})/i];
     for (let pattern of imeiPatterns) {
         const match = clean.match(pattern);
         if (match && match[1]) {
             const num = match[1];
-            if (/^[3-9]/.test(num) && isValidIMEI(num)) {
-                if (!imei1) imei1 = num;
-                else if (num !== imei1 && !imei2) imei2 = num;
-            }
+            if (/^[3-9]/.test(num) && isValidIMEI(num)) { if (!imei1) imei1 = num; else if (num !== imei1 && !imei2) imei2 = num; }
         }
     }
     if (!imei1 && candidates.length > 0) imei1 = candidates[0];
-    if (!imei2 && candidates.length > 1) {
-        for (let c of candidates) {
-            if (c !== imei1) { imei2 = c; break; }
-        }
-    }
+    if (!imei2 && candidates.length > 1) { for (let c of candidates) { if (c !== imei1) { imei2 = c; break; } } }
     if (!imei1 && all14Digits.length > 0) {
         for (let num of all14Digits) {
             if (!/^[3-9]/.test(num)) continue;
             for (let check = 0; check <= 9; check++) {
                 const candidate = num + check;
-                if (isValidIMEI(candidate)) {
-                    if (!imei1) imei1 = candidate;
-                    else if (candidate !== imei1 && !imei2) imei2 = candidate;
-                    break;
-                }
+                if (isValidIMEI(candidate)) { if (!imei1) imei1 = candidate; else if (candidate !== imei1 && !imei2) imei2 = candidate; break; }
             }
             if (imei1 && imei2) break;
         }
@@ -1820,15 +1170,12 @@ function extractIMEIs(text) {
     return { imei1, imei2 };
 }
 
+// 🔥 Modified: routes to correct input based on scannerTarget
 function onScanSuccess(imei1, imei2) {
     if (!isScanning) return;
     isScanning = false;
-    const imeiInput = document.getElementById('imei');
-    if (imeiInput) {
-        imeiInput.value = imei1;
-        imeiInput.classList.add('flash-green');
-        setTimeout(() => imeiInput.classList.remove('flash-green'), 500);
-    }
+    const targetInput = scannerTarget === 'outside' ? document.getElementById('opImei') : document.getElementById('imei');
+    if (targetInput) { targetInput.value = imei1; targetInput.classList.add('flash-green'); setTimeout(() => targetInput.classList.remove('flash-green'), 500); }
     if (imei2) hiddenImei2 = imei2;
     if (navigator.vibrate) navigator.vibrate([80, 50, 80]);
     stopScanner();
@@ -1837,13 +1184,11 @@ function onScanSuccess(imei1, imei2) {
 
 function stopScanner() {
     isScanning = false;
+    scannerTarget = 'regular'; // reset
     stopOCRScanning();
     if (zxingCodeReader) { try { zxingCodeReader.reset(); } catch (e) {} zxingCodeReader = null; }
     const video = document.getElementById('scanVideo');
-    if (video && video.srcObject) {
-        video.srcObject.getTracks().forEach(t => t.stop());
-        video.srcObject = null;
-    }
+    if (video && video.srcObject) { video.srcObject.getTracks().forEach(t => t.stop()); video.srcObject = null; }
     if (tesseractWorker) { try { tesseractWorker.terminate(); } catch (e) {} tesseractWorker = null; }
     document.getElementById('scannerModal').classList.add('hidden');
     document.getElementById('scanSpinner').style.display = 'none';
@@ -1852,8 +1197,7 @@ function stopScanner() {
     document.getElementById('captureBtn').style.display = 'none';
     document.getElementById('imeiResult').classList.remove('show');
     const captureBtn = document.getElementById('captureBtn');
-    captureBtn.disabled = false;
-    captureBtn.innerHTML = '<i data-lucide="camera"></i> Capture & Read IMEI';
+    if (captureBtn) { captureBtn.disabled = false; captureBtn.innerHTML = '<i data-lucide="camera"></i> Capture & Read IMEI'; }
     lucide.createIcons();
 }
 
@@ -1864,11 +1208,7 @@ function showToast(message, type = 'info') {
     toast.className = `fixed top-20 left-1/2 -translate-x-1/2 ${colors[type]} text-white px-5 py-3 rounded-xl shadow-2xl z-[60] font-semibold text-sm fade-in max-w-[90%]`;
     toast.textContent = message;
     document.body.appendChild(toast);
-    setTimeout(() => {
-        toast.style.transition = 'opacity 0.3s';
-        toast.style.opacity = '0';
-        setTimeout(() => toast.remove(), 300);
-    }, 2800);
+    setTimeout(() => { toast.style.transition = 'opacity 0.3s'; toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 2800);
 }
 
 // === SECTION 19: IST DATE/TIME FORMATTER ===
@@ -1885,11 +1225,335 @@ function getISTDateTime() {
     const seconds = String(istTime.getUTCSeconds()).padStart(2,'0');
     const ampm = hours >= 12 ? 'PM' : 'AM';
     hours = hours % 12 || 12;
-    const hh = String(hours).padStart(2,'0');
-    return `${dd}-${mmm}-${yyyy}, ${hh}:${minutes}:${seconds} ${ampm} IST`;
+    return `${dd}-${mmm}-${yyyy}, ${String(hours).padStart(2,'0')}:${minutes}:${seconds} ${ampm} IST`;
 }
 
-// === SECTION 20: INITIALIZATION ===
+// ================================================================
+// === SECTION 20: CASHIFY OUTSIDE PICKUP — NEW FEATURE ===========
+// ================================================================
+// ID format: COP-YYMMDD-NNNN
+//   - COP     = Cashify Outside Pickup prefix (distinct from Flipkart's OP-)
+//   - YYMMDD  = date
+//   - NNNN    = daily counter (Firebase transaction, safe)
+// Counter node: cashify_outside_pickup_counters/{YYMMDD}
+// Record node : outside_pickups/{pickupId}
+// Photos      : outside_pickup_docs/{pickupId}/
+// Status: 'pending' → no WhatsApp from rider, no inventory impact.
+// ================================================================
+
+let scannerTarget = 'regular'; // 'regular' | 'outside'
+let opSelectedRam = '';
+let opSelectedStorage = '';
+let opSelectedNetwork = '';
+const OP_NETWORK_OPTIONS = ['1G','2G','3G','4G','5G'];
+let outsidePickupId = '';
+let outsidePickupImages = [];
+const OUTSIDE_MAX_IMAGES = 5;
+
+// ---- Chip helpers ----
+function buildOutsideChips(kind, options, extraClass) {
+    return options.map(o => `<button type="button" class="spec-chip ${extraClass || ''}" data-kind="${kind}" data-val="${o}" onclick="selectOutsideSpec('${kind}','${o}',this)">${o}</button>`).join('');
+}
+
+function selectOutsideSpec(kind, val, el) {
+    const group = el.parentElement;
+    const already = el.classList.contains('active');
+    group.querySelectorAll('.spec-chip').forEach(b => b.classList.remove('active'));
+    const finalVal = already ? '' : val;
+    if (!already) el.classList.add('active');
+    if (kind === 'ram') opSelectedRam = finalVal;
+    if (kind === 'storage') opSelectedStorage = finalVal;
+    if (kind === 'network') opSelectedNetwork = finalVal;
+    if (navigator.vibrate) { try { navigator.vibrate(12); } catch(_){} }
+    updateOutsideSpecUI();
+}
+
+function updateOutsideSpecUI() {
+    const r = document.getElementById('opRamPick');
+    const s = document.getElementById('opStoragePick');
+    const n = document.getElementById('opNetworkPick');
+    if (r) { r.textContent = opSelectedRam || 'Not selected'; r.className = 'picked' + (opSelectedRam ? '' : ' empty'); }
+    if (s) { s.textContent = opSelectedStorage || 'Not selected'; s.className = 'picked' + (opSelectedStorage ? '' : ' empty'); }
+    if (n) { n.textContent = opSelectedNetwork || 'Not selected'; n.className = 'picked' + (opSelectedNetwork ? '' : ' empty'); }
+}
+
+// ---- Reserve unique ID (transactional, COP- prefix) ----
+async function reserveOutsidePickupIdCashify() {
+    const now = new Date();
+    const yy = String(now.getFullYear()).slice(-2);
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const dateKey = `${yy}${mm}${dd}`;
+    const counterRef = db.ref('cashify_outside_pickup_counters/' + dateKey);
+    for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+            const result = await counterRef.transaction(current => (current || 0) + 1);
+            if (result.committed) {
+                const num = result.snapshot.val();
+                return `COP-${dateKey}-${String(num).padStart(4, '0')}`;
+            }
+        } catch (e) { console.warn('ID reservation attempt ' + attempt + ' failed:', e); }
+        await new Promise(r => setTimeout(r, 500));
+    }
+    throw new Error('Could not reserve ID. Please retry.');
+}
+
+// ---- Open / Close Outside Pickup Page ----
+async function openOutsidePickup() {
+    if (!currentUser) { showToast('Please login first', 'error'); return; }
+    outsidePickupId = '';
+    outsidePickupImages = [];
+    opSelectedRam = ''; opSelectedStorage = ''; opSelectedNetwork = '';
+    hiddenImei2 = '';
+
+    document.getElementById('mainTabBar').style.display = 'none';
+    document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+    document.getElementById('outsidePickupPage').style.display = 'block';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    const idEl = document.getElementById('outsidePickupIdDisplay');
+    if (idEl) idEl.textContent = '⏳ Generating…';
+
+    const ramChipsEl = document.getElementById('opRamChips');
+    const stoChipsEl = document.getElementById('opStorageChips');
+    const netChipsEl = document.getElementById('opNetworkChips');
+    if (ramChipsEl) ramChipsEl.innerHTML = buildOutsideChips('ram', RAM_OPTIONS);
+    if (stoChipsEl) stoChipsEl.innerHTML = buildOutsideChips('storage', STORAGE_OPTIONS);
+    if (netChipsEl) netChipsEl.innerHTML = buildOutsideChips('network', OP_NETWORK_OPTIONS, 'net');
+
+    document.getElementById('opPhoneModel').value = '';
+    document.getElementById('opImei').value = '';
+    document.getElementById('opValue').value = '';
+    document.getElementById('opCustomerName').value = '';
+    document.getElementById('opAadhaarNumber').value = '';
+    document.getElementById('opBillNumber').value = '';
+    document.getElementById('opPhotoPreview').innerHTML = '';
+    document.getElementById('opPhotoInfo').textContent = '0 photos added · min 1 required';
+    updateOutsideSpecUI();
+    lucide.createIcons();
+
+    try {
+        const id = await reserveOutsidePickupIdCashify();
+        outsidePickupId = id;
+        if (idEl) idEl.textContent = id;
+    } catch (e) {
+        console.error('ID generation failed:', e);
+        if (idEl) idEl.textContent = '❌ Failed — Go back and retry';
+        Swal.fire({ icon: 'error', title: 'ID Generation Failed', text: 'Could not reserve a unique ID. Please check network and try again.', confirmButtonColor: '#dc2626' });
+    }
+}
+
+async function closeOutsidePickup() {
+    const hasData =
+        (document.getElementById('opPhoneModel')?.value || '').trim() ||
+        (document.getElementById('opImei')?.value || '').trim() ||
+        (document.getElementById('opValue')?.value || '').trim() ||
+        outsidePickupImages.length > 0 ||
+        opSelectedRam || opSelectedStorage || opSelectedNetwork;
+
+    if (hasData) {
+        const c = await Swal.fire({
+            title: 'Discard this pickup?', text: 'Your entered details will be lost.',
+            icon: 'warning', showCancelButton: true,
+            confirmButtonColor: '#dc2626', cancelButtonColor: '#64748b',
+            confirmButtonText: 'Yes, discard', cancelButtonText: 'Stay'
+        });
+        if (!c.isConfirmed) return;
+    }
+
+    outsidePickupImages = [];
+    outsidePickupId = '';
+    opSelectedRam = ''; opSelectedStorage = ''; opSelectedNetwork = '';
+    hiddenImei2 = '';
+
+    document.getElementById('outsidePickupPage').style.display = 'none';
+    document.getElementById('mainTabBar').style.display = 'flex';
+    switchTab('pickup');
+}
+
+// ---- Photo Handling ----
+async function handleOutsidePhotoPick(inputEl) {
+    const files = inputEl.files ? Array.from(inputEl.files) : [];
+    if (!files.length) return;
+    if (outsidePickupImages.length >= OUTSIDE_MAX_IMAGES) { showToast(`Max ${OUTSIDE_MAX_IMAGES} photos`, 'error'); inputEl.value = ''; return; }
+    const room = OUTSIDE_MAX_IMAGES - outsidePickupImages.length;
+    const infoEl = document.getElementById('opPhotoInfo');
+    if (infoEl) infoEl.textContent = '⏳ Compressing...';
+    for (const f of files.slice(0, room)) { try { outsidePickupImages.push(await compressImageFile(f)); } catch (e) { console.error(e); } }
+    inputEl.value = '';
+    renderOutsidePhotos();
+}
+
+function renderOutsidePhotos() {
+    const preview = document.getElementById('opPhotoPreview');
+    const info = document.getElementById('opPhotoInfo');
+    if (!preview) return;
+    if (!outsidePickupImages.length) { preview.innerHTML = ''; if (info) info.textContent = '0 photos added · min 1 required'; return; }
+    let totalKB = 0;
+    preview.innerHTML = `<div class="grid grid-cols-3 gap-2">` + outsidePickupImages.map((d, i) => {
+        const kb = Math.round((d.length * 3 / 4) / 1024); totalKB += kb;
+        return `<div class="relative"><img src="${d}" class="w-full h-20 object-cover rounded-lg border border-gray-200" alt="p${i}"><button type="button" onclick="removeOutsidePhoto(${i})" class="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-red-600 text-white text-xs font-bold shadow-md">✕</button><div class="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[9px] text-center rounded-b-lg">${kb}KB</div></div>`;
+    }).join('') + `</div>`;
+    if (info) info.textContent = `✅ ${outsidePickupImages.length}/${OUTSIDE_MAX_IMAGES} · ~${totalKB} KB`;
+}
+
+function removeOutsidePhoto(idx) { outsidePickupImages.splice(idx, 1); renderOutsidePhotos(); }
+
+// ---- Open Scanner for Outside ----
+function openOutsideScanner() { scannerTarget = 'outside'; startScanner(); }
+
+// ---- Review & Submit ----
+function escapeHtmlOP(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+async function reviewOutsidePickup() {
+    if (!currentUser) { showToast('Please login first', 'error'); return; }
+    if (!outsidePickupId) { Swal.fire({ icon: 'error', title: 'ID Not Ready', text: 'Pickup ID is not ready yet. Please go back and reopen.', confirmButtonColor: '#dc2626' }); return; }
+
+    const phoneModel = (document.getElementById('opPhoneModel').value || '').trim();
+    const imei = (document.getElementById('opImei').value || '').trim();
+    const valueRaw = (document.getElementById('opValue').value || '').trim();
+    const customerName = (document.getElementById('opCustomerName').value || '').trim();
+    const aadhaarNumber = (document.getElementById('opAadhaarNumber').value || '').trim();
+    const billNumber = (document.getElementById('opBillNumber').value || '').trim();
+
+    if (!phoneModel) { showToast('Enter phone model', 'error'); document.getElementById('opPhoneModel').focus(); return; }
+    if (!imei || imei.length !== 15 || !/^\d{15}$/.test(imei)) { showToast('Enter valid 15-digit IMEI', 'error'); document.getElementById('opImei').focus(); return; }
+    const value = parseInt(valueRaw);
+    if (!value || value <= 0 || isNaN(value)) { showToast('Enter valid agreed value', 'error'); document.getElementById('opValue').focus(); return; }
+    if (!opSelectedRam) { showToast('Select RAM', 'error'); return; }
+    if (!opSelectedStorage) { showToast('Select Storage', 'error'); return; }
+    if (!opSelectedNetwork) { showToast('Select Network', 'error'); return; }
+    if (outsidePickupImages.length < 1) { showToast('Add at least 1 phone photo', 'error'); return; }
+
+    const summaryHtml = `
+        <div style="text-align:left;font-size:13px;line-height:1.6;">
+            <div style="background:linear-gradient(135deg,#faf5ff,#f3e8ff);border:1px solid #d8b4fe;border-radius:12px;padding:10px 12px;margin-bottom:10px;text-align:center;">
+                <div style="font-size:9px;font-weight:800;color:#7c3aed;letter-spacing:1.5px;">CASHIFY · PICKUP ID</div>
+                <div style="font-family:monospace;font-size:14px;font-weight:800;color:#4c1d95;margin-top:2px;">${escapeHtmlOP(outsidePickupId)}</div>
+            </div>
+            <p><strong>Model:</strong> ${escapeHtmlOP(phoneModel)}</p>
+            <p><strong>IMEI:</strong> <span style="font-family:monospace;">${escapeHtmlOP(imei)}</span></p>
+            <p><strong>RAM / Storage:</strong> ${opSelectedRam} / ${opSelectedStorage}</p>
+            <p><strong>Network:</strong> ${opSelectedNetwork}</p>
+            <p><strong>Agreed Value:</strong> ₹${value.toLocaleString('en-IN')}</p>
+            <p><strong>Photos:</strong> ${outsidePickupImages.length} uploaded</p>
+            ${customerName ? `<p><strong>Customer:</strong> ${escapeHtmlOP(customerName)}</p>` : ''}
+            ${aadhaarNumber ? `<p><strong>Aadhaar:</strong> ${escapeHtmlOP(aadhaarNumber)}</p>` : ''}
+            ${billNumber ? `<p><strong>Bill No:</strong> ${escapeHtmlOP(billNumber)}</p>` : ''}
+            <div style="margin-top:10px;padding:8px;background:#fef3c7;border:1px solid #fde68a;border-radius:8px;font-size:11px;color:#92400e;">
+                <strong>ℹ️ Status:</strong> Record will be saved as <strong>Pending Approval</strong>. Admin will verify and approve.
+            </div>
+        </div>`;
+
+    const result = await Swal.fire({
+        title: 'Review Outside Pickup',
+        html: summaryHtml, icon: 'question',
+        showCancelButton: true, confirmButtonText: '✅ Submit for Approval',
+        cancelButtonText: 'Edit', confirmButtonColor: '#7c3aed', cancelButtonColor: '#64748b',
+        width: 'min(520px, 96vw)'
+    });
+    if (result.isConfirmed) submitOutsidePickup();
+}
+
+async function submitOutsidePickup() {
+    if (!currentUser) { showToast('Please login first', 'error'); return; }
+    if (!outsidePickupId) { showToast('Pickup ID missing. Reopen form.', 'error'); return; }
+
+    const phoneModel = (document.getElementById('opPhoneModel').value || '').trim();
+    const imei = (document.getElementById('opImei').value || '').trim();
+    const value = parseInt((document.getElementById('opValue').value || '').trim());
+    const customerName = (document.getElementById('opCustomerName').value || '').trim();
+    const aadhaarNumber = (document.getElementById('opAadhaarNumber').value || '').trim();
+    const billNumber = (document.getElementById('opBillNumber').value || '').trim();
+    const pickupId = outsidePickupId;
+
+    try {
+        const existingSnap = await db.ref('outside_pickups/' + pickupId).once('value');
+        if (existingSnap.exists()) {
+            showToast('⚠️ Pickup ID collision. Regenerating...', 'error');
+            outsidePickupId = await reserveOutsidePickupIdCashify();
+            document.getElementById('outsidePickupIdDisplay').textContent = outsidePickupId;
+            return;
+        }
+
+        Swal.fire({ title: 'Uploading photos...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        const photoUrls = [];
+        for (let i = 0; i < outsidePickupImages.length; i++) {
+            try {
+                const blob = await (await fetch(outsidePickupImages[i])).blob();
+                const fileName = `${pickupId}_${i}_${Date.now()}.jpg`;
+                const storageRef = storage.ref(`outside_pickup_docs/${pickupId}/${fileName}`);
+                const snapshot = await storageRef.put(blob, { contentType: 'image/jpeg' });
+                photoUrls.push(await snapshot.ref.getDownloadURL());
+            } catch (e) { console.error('Photo upload failed:', e); Swal.close(); showToast('❌ Photo upload failed. Try again.', 'error'); return; }
+        }
+
+        const now = new Date();
+        const istDateTime = getISTDateTime();
+
+        const record = {
+            pickupId,
+            platform: 'cashify',
+            status: 'pending',
+            rider: 'Parvameer',
+            agent: currentUser.username,
+            agentName: currentUser.name || currentUser.username,
+            phoneModel,
+            imei,
+            value,
+            ram: opSelectedRam,
+            storage: opSelectedStorage,
+            ramStorage: opSelectedRam + '/' + opSelectedStorage,
+            networkType: opSelectedNetwork,
+            customerName: customerName || '',
+            aadhaarNumber: aadhaarNumber || '',
+            billNumber: billNumber || '',
+            phoneImages: photoUrls,
+            createdAt: Date.now(),
+            timestamp: now.toISOString(),
+            timestampIST: istDateTime,
+            date: now.toLocaleDateString('en-IN'),
+            inventoryCreated: false
+        };
+
+        await db.ref('outside_pickups/' + pickupId).set(record);
+        Swal.close();
+
+        Swal.fire({
+            icon: 'success',
+            title: '✅ Submitted for Approval',
+            html: `
+                <div style="text-align:left;">
+                    <div style="background:linear-gradient(135deg,#faf5ff,#f3e8ff);border:2px solid #d8b4fe;border-radius:12px;padding:14px;text-align:center;margin-bottom:12px;">
+                        <div style="font-size:10px;font-weight:800;color:#7c3aed;letter-spacing:1.5px;">CASHIFY · PICKUP ID</div>
+                        <div style="font-family:monospace;font-size:16px;font-weight:800;color:#4c1d95;margin-top:4px;word-break:break-all;">${escapeHtmlOP(pickupId)}</div>
+                    </div>
+                    <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:12px;font-size:12px;color:#92400e;text-align:center;">
+                        <strong>⏳ Status: Pending Approval</strong><br>
+                        <span style="font-size:11px;">Admin will verify and approve. WhatsApp message will be sent after approval.</span>
+                    </div>
+                </div>`,
+            confirmButtonText: 'OK', confirmButtonColor: '#7c3aed', width: 'min(420px, 96vw)'
+        });
+
+        outsidePickupImages = [];
+        outsidePickupId = '';
+        opSelectedRam = ''; opSelectedStorage = ''; opSelectedNetwork = '';
+        hiddenImei2 = '';
+
+        document.getElementById('outsidePickupPage').style.display = 'none';
+        document.getElementById('mainTabBar').style.display = 'flex';
+        switchTab('pickup');
+    } catch (e) {
+        console.error('Outside pickup submit error:', e);
+        Swal.close();
+        showToast('❌ Submit failed. Please try again.', 'error');
+    }
+}
+
+// === SECTION 21: INITIALIZATION ===
 document.addEventListener('DOMContentLoaded', () => {
     setupBackNavigation();
 
@@ -1902,19 +1566,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('offlineBanner').classList.add('hidden');
     const loggedIn = checkAuth();
-    if (!loggedIn) {
-        document.getElementById('authOverlay').style.display = 'flex';
-    }
+    if (!loggedIn) { document.getElementById('authOverlay').style.display = 'flex'; }
     if (loggedIn) {
         loadPendingOrders();
         const today = getLocalDate();
         document.getElementById('attendanceDateDisplay').textContent = today;
         switchTab('pickup');
     }
-    document.getElementById('loginPassword').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') loginUser();
-    });
-    document.getElementById('loginUsername').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') document.getElementById('loginPassword').focus();
-    });
+    document.getElementById('loginPassword').addEventListener('keydown', (e) => { if (e.key === 'Enter') loginUser(); });
+    document.getElementById('loginUsername').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('loginPassword').focus(); });
 });
