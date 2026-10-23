@@ -1497,7 +1497,7 @@ async function submitOutsidePickup() {
             pickupId,
             platform: 'cashify',
             status: 'pending',
-            rider: 'Parvameer',
+            rider: currentUser.name || currentUser.username,
             agent: currentUser.username,
             agentName: currentUser.name || currentUser.username,
             phoneModel,
