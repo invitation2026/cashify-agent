@@ -823,9 +823,14 @@ async function submitData() {
         const coinsRaw = (document.getElementById('coins')?.value || '').trim();
         if (!phoneModel || !imei || !value) { Swal.fire({ icon: 'error', title: 'Missing Details', text: 'Fill Model, IMEI, Value', confirmButtonColor: '#3b82f6' }); return; }
         if (coinsRaw === '' || isNaN(parseInt(coinsRaw)) || parseInt(coinsRaw) < 0) { Swal.fire({ icon: 'error', title: 'Missing Coins', text: 'Please enter a valid coins quantity.', confirmButtonColor: '#3b82f6' }); const coinsInput = document.getElementById('coins'); if (coinsInput) coinsInput.focus(); return; }
+        // Same phone must not already exist in inventory or a pending outside pickup.
+        // The current order is excluded so editing its own record is never blocked.
+        const duplicate = await findDuplicateImei(imei, orderId);
+        if (duplicate) { showDuplicateImeiWarning(imei, phoneModel, duplicate); return; }
         const coinsQty = parseInt(coinsRaw);
         dbData.phoneModel = phoneModel;
         dbData.imei = imei;
+        dbData.rider = currentUser.name || currentUser.username;
         if (hiddenImei2) dbData.imei2 = hiddenImei2;
         dbData.value = parseInt(value);
         dbData.customerName = custName || 'N/A';
@@ -1277,25 +1282,171 @@ function updateOutsideSpecUI() {
     if (n) { n.textContent = opSelectedNetwork || 'Not selected'; n.className = 'picked' + (opSelectedNetwork ? '' : ' empty'); }
 }
 
-// ---- Reserve unique ID (transactional, COP- prefix) ----
-async function reserveOutsidePickupIdCashify() {
-    const now = new Date();
-    const yy = String(now.getFullYear()).slice(-2);
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    const dateKey = `${yy}${mm}${dd}`;
+// ---- Stable numbering + duplicate protection ----
+// The counter is incremented ONLY when a pickup is actually submitted, so
+// opening / refreshing / reopening the form never changes the displayed number.
+const OP_CLAIM_TTL_MS = 90 * 1000;
+let opSubmitInFlight = false;
+
+function getOutsidePickupDateKey(d = new Date()) {
+    const yy = String(d.getFullYear()).slice(-2);
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yy}${mm}${dd}`;
+}
+
+function formatOutsidePickupId(dateKey, num) {
+    return `COP-${dateKey}-${String(num).padStart(4, '0')}`;
+}
+
+// Read-only preview. Never writes to the counter. Throws if the preview cannot
+// be read; the caller then shows "Auto-generated on submit" and submission
+// still works (the number is reserved at submit time).
+async function peekOutsidePickupId() {
+    const dateKey = getOutsidePickupDateKey();
+    const snap = await db.ref('cashify_outside_pickup_counters/' + dateKey).once('value');
+    return formatOutsidePickupId(dateKey, (Number(snap.val()) || 0) + 1);
+}
+
+// Atomic reservation — only called right before the record is written.
+async function reserveOutsidePickupId() {
+    const dateKey = getOutsidePickupDateKey();
     const counterRef = db.ref('cashify_outside_pickup_counters/' + dateKey);
     for (let attempt = 0; attempt < 3; attempt++) {
         try {
             const result = await counterRef.transaction(current => (current || 0) + 1);
             if (result.committed) {
-                const num = result.snapshot.val();
-                return `COP-${dateKey}-${String(num).padStart(4, '0')}`;
+                return formatOutsidePickupId(dateKey, Number(result.snapshot.val()));
             }
-        } catch (e) { console.warn('ID reservation attempt ' + attempt + ' failed:', e); }
-        await new Promise(r => setTimeout(r, 500));
+        } catch (e) {
+            console.warn('ID reservation attempt ' + (attempt + 1) + ' failed:', e);
+        }
+        await new Promise(r => setTimeout(r, 400));
     }
     throw new Error('Could not reserve ID. Please retry.');
+}
+
+// Roll back the counter if the submit fails before the record is saved.
+async function releaseOutsidePickupCounter(pickupId) {
+    const m = /^COP-(\d{6})-(\d{4,})$/.exec(String(pickupId || ''));
+    if (!m) return;
+    const dateKey = m[1];
+    const num = Number(m[2]);
+    if (!num) return;
+    try {
+        await db.ref('cashify_outside_pickup_counters/' + dateKey).transaction(current => {
+            const cur = Number(current) || 0;
+            return cur === num ? Math.max(0, cur - 1) : cur; // only if still the latest
+        });
+    } catch (e) {
+        console.warn('Could not release pickup number:', e);
+    }
+}
+
+// Short-lived atomic claim per IMEI: stops two devices submitting the same
+// phone at the same time. Auto-expires so a rejected phone can be re-entered.
+// If the rules deny this node we degrade gracefully (duplicate scan + atomic
+// write still protect the record).
+async function acquireOutsidePickupClaim(imei) {
+    try {
+        const nowTs = Date.now();
+        const result = await db.ref('cashify_outside_pickup_claims/' + imei).transaction(current => {
+            if (current && typeof current === 'object') {
+                const ts = Number(current.ts) || 0;
+                if (nowTs - ts < OP_CLAIM_TTL_MS) return; // abort — submission already running
+            }
+            return { ts: nowTs, by: currentUser.username };
+        });
+        return { supported: true, held: result.committed };
+    } catch (e) {
+        console.warn('Concurrency lock unavailable — continuing with duplicate checks only:', e);
+        return { supported: false, held: false };
+    }
+}
+
+async function releaseOutsidePickupClaim(imei) {
+    try { await db.ref('cashify_outside_pickup_claims/' + imei).remove(); } catch (_) {}
+}
+
+// Returns the existing record that already uses this IMEI, or null.
+// IMEI is the only duplicate key — the model is returned only so the warning
+// can identify the existing entry (many phones share a model).
+async function findDuplicateImei(imei, excludeOrderId) {
+    const target = String(imei || '').trim();
+    if (!target) return null;
+
+    // Completed pickups / inventory
+    try {
+        const snap = await db.ref('pickups').once('value');
+        const all = snap.val() || {};
+        for (const [id, rec] of Object.entries(all)) {
+            if (!rec) continue;
+            if (excludeOrderId && id === excludeOrderId) continue;
+            if ((rec.status || '') !== 'pickup') continue;
+            if (String(rec.imei || '').trim() !== target) continue;
+            return {
+                type: 'inventory',
+                pickupId: id,
+                phoneModel: rec.phoneModel || '',
+                status: 'Pickup Completed',
+                rider: rec.rider || rec.agent || '',
+                date: rec.date || rec.timestampIST || ''
+            };
+        }
+    } catch (e) {
+        console.warn('Inventory duplicate check skipped:', e);
+    }
+
+    // Outside pickups (rejected ones may be re-entered)
+    try {
+        const snap = await db.ref('outside_pickups').once('value');
+        const all = snap.val() || {};
+        for (const [id, rec] of Object.entries(all)) {
+            if (!rec) continue;
+            if ((rec.status || 'pending') === 'rejected') continue;
+            if (String(rec.imei || '').trim() !== target) continue;
+            return {
+                type: 'outside',
+                pickupId: id,
+                phoneModel: rec.phoneModel || '',
+                status: rec.status === 'approved' ? 'Approved (in inventory)' : 'Pending Approval',
+                rider: rec.rider || rec.agentName || rec.agent || '',
+                date: rec.date || rec.timestampIST || ''
+            };
+        }
+    } catch (e) {
+        console.warn('Outside pickup duplicate check skipped:', e);
+    }
+
+    return null;
+}
+
+function showDuplicateImeiWarning(imei, phoneModel, duplicate) {
+    const dupModel = duplicate.phoneModel || '—';
+    const modelNote = (phoneModel && duplicate.phoneModel &&
+        phoneModel.toLowerCase() !== duplicate.phoneModel.toLowerCase())
+        ? `<div style="margin-top:4px;">New entry model: <b>${escapeHtmlOP(phoneModel)}</b> <span style="color:#b91c1c;">(different from above)</span></div>`
+        : '';
+    Swal.fire({
+        icon: 'warning',
+        title: 'Duplicate Entry: This IMEI number already exists.',
+        html: `
+            <div style="text-align:left;font-size:13px;line-height:1.75;">
+                <div>IMEI: <b style="font-family:monospace;">${escapeHtmlOP(imei)}</b></div>
+                <div>Existing Model: <b>${escapeHtmlOP(dupModel)}</b></div>
+                <div>Existing Pickup ID: <b style="font-family:monospace;">${escapeHtmlOP(duplicate.pickupId)}</b></div>
+                <div>Status: <b>${escapeHtmlOP(duplicate.status)}</b></div>
+                ${duplicate.rider ? `<div>Rider: <b>${escapeHtmlOP(duplicate.rider)}</b></div>` : ''}
+                ${duplicate.date ? `<div style="color:#6b7280;">Date: ${escapeHtmlOP(duplicate.date)}</div>` : ''}
+                ${modelNote}
+                <div style="margin-top:10px;padding:9px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;font-size:11.5px;color:#991b1b;">
+                    This entry was NOT saved. The same IMEI cannot be added twice.
+                </div>
+            </div>`,
+        confirmButtonText: 'OK',
+        confirmButtonColor: '#dc2626',
+        width: 'min(460px, 94vw)'
+    });
 }
 
 // ---- Open / Close Outside Pickup Page ----
@@ -1312,7 +1463,7 @@ async function openOutsidePickup() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
     const idEl = document.getElementById('outsidePickupIdDisplay');
-    if (idEl) idEl.textContent = '⏳ Generating…';
+    if (idEl) idEl.textContent = '⏳ Loading…';
 
     const ramChipsEl = document.getElementById('opRamChips');
     const stoChipsEl = document.getElementById('opStorageChips');
@@ -1328,18 +1479,19 @@ async function openOutsidePickup() {
     document.getElementById('opAadhaarNumber').value = '';
     document.getElementById('opBillNumber').value = '';
     document.getElementById('opPhotoPreview').innerHTML = '';
-    document.getElementById('opPhotoInfo').textContent = '0 photos added · min 1 required';
+    document.getElementById('opPhotoInfo').textContent = '0 photos added · optional';
     updateOutsideSpecUI();
     lucide.createIcons();
 
     try {
-        const id = await reserveOutsidePickupIdCashify();
-        outsidePickupId = id;
-        if (idEl) idEl.textContent = id;
+        // Preview only — the counter is NOT touched here, so refresh/reopen
+        // always shows the same next number until a pickup is actually created.
+        outsidePickupId = await peekOutsidePickupId();
+        if (idEl) idEl.textContent = outsidePickupId;
     } catch (e) {
-        console.error('ID generation failed:', e);
-        if (idEl) idEl.textContent = '❌ Failed — Go back and retry';
-        Swal.fire({ icon: 'error', title: 'ID Generation Failed', text: 'Could not reserve a unique ID. Please check network and try again.', confirmButtonColor: '#dc2626' });
+        console.warn('ID preview failed:', e);
+        outsidePickupId = '';
+        if (idEl) idEl.textContent = 'Auto-generated on submit';
     }
 }
 
@@ -1388,7 +1540,7 @@ function renderOutsidePhotos() {
     const preview = document.getElementById('opPhotoPreview');
     const info = document.getElementById('opPhotoInfo');
     if (!preview) return;
-    if (!outsidePickupImages.length) { preview.innerHTML = ''; if (info) info.textContent = '0 photos added · min 1 required'; return; }
+    if (!outsidePickupImages.length) { preview.innerHTML = ''; if (info) info.textContent = '0 photos added · optional'; return; }
     let totalKB = 0;
     preview.innerHTML = `<div class="grid grid-cols-3 gap-2">` + outsidePickupImages.map((d, i) => {
         const kb = Math.round((d.length * 3 / 4) / 1024); totalKB += kb;
@@ -1409,7 +1561,6 @@ function escapeHtmlOP(s) {
 
 async function reviewOutsidePickup() {
     if (!currentUser) { showToast('Please login first', 'error'); return; }
-    if (!outsidePickupId) { Swal.fire({ icon: 'error', title: 'ID Not Ready', text: 'Pickup ID is not ready yet. Please go back and reopen.', confirmButtonColor: '#dc2626' }); return; }
 
     const phoneModel = (document.getElementById('opPhoneModel').value || '').trim();
     const imei = (document.getElementById('opImei').value || '').trim();
@@ -1425,20 +1576,19 @@ async function reviewOutsidePickup() {
     if (!opSelectedRam) { showToast('Select RAM', 'error'); return; }
     if (!opSelectedStorage) { showToast('Select Storage', 'error'); return; }
     if (!opSelectedNetwork) { showToast('Select Network', 'error'); return; }
-    if (outsidePickupImages.length < 1) { showToast('Add at least 1 phone photo', 'error'); return; }
 
     const summaryHtml = `
         <div style="text-align:left;font-size:13px;line-height:1.6;">
             <div style="background:linear-gradient(135deg,#faf5ff,#f3e8ff);border:1px solid #d8b4fe;border-radius:12px;padding:10px 12px;margin-bottom:10px;text-align:center;">
                 <div style="font-size:9px;font-weight:800;color:#7c3aed;letter-spacing:1.5px;">CASHIFY · PICKUP ID</div>
-                <div style="font-family:monospace;font-size:14px;font-weight:800;color:#4c1d95;margin-top:2px;">${escapeHtmlOP(outsidePickupId)}</div>
+                <div style="font-family:monospace;font-size:14px;font-weight:800;color:#4c1d95;margin-top:2px;">${escapeHtmlOP(outsidePickupId || 'Auto-generated on submit')}</div>
             </div>
             <p><strong>Model:</strong> ${escapeHtmlOP(phoneModel)}</p>
             <p><strong>IMEI:</strong> <span style="font-family:monospace;">${escapeHtmlOP(imei)}</span></p>
             <p><strong>RAM / Storage:</strong> ${opSelectedRam} / ${opSelectedStorage}</p>
             <p><strong>Network:</strong> ${opSelectedNetwork}</p>
             <p><strong>Agreed Value:</strong> ₹${value.toLocaleString('en-IN')}</p>
-            <p><strong>Photos:</strong> ${outsidePickupImages.length} uploaded</p>
+            <p><strong>Photos:</strong> ${outsidePickupImages.length ? `${outsidePickupImages.length} uploaded` : 'None (optional)'}</p>
             ${customerName ? `<p><strong>Customer:</strong> ${escapeHtmlOP(customerName)}</p>` : ''}
             ${aadhaarNumber ? `<p><strong>Aadhaar:</strong> ${escapeHtmlOP(aadhaarNumber)}</p>` : ''}
             ${billNumber ? `<p><strong>Bill No:</strong> ${escapeHtmlOP(billNumber)}</p>` : ''}
@@ -1459,7 +1609,7 @@ async function reviewOutsidePickup() {
 
 async function submitOutsidePickup() {
     if (!currentUser) { showToast('Please login first', 'error'); return; }
-    if (!outsidePickupId) { showToast('Pickup ID missing. Reopen form.', 'error'); return; }
+    if (opSubmitInFlight) { showToast('Submission already in progress…', 'info'); return; }
 
     const phoneModel = (document.getElementById('opPhoneModel').value || '').trim();
     const imei = (document.getElementById('opImei').value || '').trim();
@@ -1467,18 +1617,54 @@ async function submitOutsidePickup() {
     const customerName = (document.getElementById('opCustomerName').value || '').trim();
     const aadhaarNumber = (document.getElementById('opAadhaarNumber').value || '').trim();
     const billNumber = (document.getElementById('opBillNumber').value || '').trim();
-    const pickupId = outsidePickupId;
+
+    if (!imei) { showToast('IMEI missing. Please re-enter.', 'error'); return; }
+
+    opSubmitInFlight = true;
+    let pickupId = '';
+    let reservedId = '';
+    let recordSaved = false;
+    let claimHeld = false;
 
     try {
-        const existingSnap = await db.ref('outside_pickups/' + pickupId).once('value');
-        if (existingSnap.exists()) {
-            showToast('⚠️ Pickup ID collision. Regenerating...', 'error');
-            outsidePickupId = await reserveOutsidePickupIdCashify();
-            document.getElementById('outsidePickupIdDisplay').textContent = outsidePickupId;
+        // ---- 1) Only one submission per phone at a time (atomic, auto-expiring) ----
+        const claim = await acquireOutsidePickupClaim(imei);
+        claimHeld = claim.supported && claim.held;
+        if (claim.supported && !claim.held) {
+            Swal.fire({
+                icon: 'info',
+                title: 'Already Submitting',
+                html: 'This phone is being submitted right now.<br><span style="font-size:12px;color:#6b7280;">Please wait a few seconds, then check the pickup list.</span>',
+                confirmButtonColor: '#7c3aed'
+            });
             return;
         }
 
-        Swal.fire({ title: 'Uploading photos...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        // ---- 2) Reject repeats of a phone that already exists ----
+        // IMEI is the unique key. Same model alone is NOT a duplicate.
+        const duplicate = await findDuplicateImei(imei);
+        if (duplicate) {
+            showDuplicateImeiWarning(imei, phoneModel, duplicate);
+            return;
+        }
+
+        // ---- 3) Reserve the number only now (successful submit path) ----
+        for (let attempt = 0; attempt < 5 && !pickupId; attempt++) {
+            const candidate = await reserveOutsidePickupId();
+            const taken = await db.ref('outside_pickups/' + candidate).once('value');
+            if (taken.exists()) {
+                console.warn('Counter is behind an existing record, retrying:', candidate);
+                continue; // never overwrite an existing record
+            }
+            pickupId = candidate;
+            reservedId = candidate;
+        }
+        if (!pickupId) throw new Error('Could not find a free pickup ID');
+        const liveIdEl = document.getElementById('outsidePickupIdDisplay');
+        if (liveIdEl) liveIdEl.textContent = pickupId;
+
+        // ---- 4) Upload photos under the reserved ID ----
+        Swal.fire({ title: outsidePickupImages.length ? 'Uploading photos...' : 'Saving pickup...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
         const photoUrls = [];
         for (let i = 0; i < outsidePickupImages.length; i++) {
             try {
@@ -1518,7 +1704,13 @@ async function submitOutsidePickup() {
             inventoryCreated: false
         };
 
-        await db.ref('outside_pickups/' + pickupId).set(record);
+        // ---- 5) Atomic create: never overwrite an existing pickup record ----
+        const write = await db.ref('outside_pickups/' + pickupId).transaction(current => current ? undefined : record);
+        if (!write.committed) {
+            showToast('That pickup number was just taken. No record was overwritten — please retry.', 'error');
+            return;
+        }
+        recordSaved = true;
         Swal.close();
 
         Swal.fire({
@@ -1550,6 +1742,22 @@ async function submitOutsidePickup() {
         console.error('Outside pickup submit error:', e);
         Swal.close();
         showToast('❌ Submit failed. Please try again.', 'error');
+    } finally {
+        if (!recordSaved && reservedId) await releaseOutsidePickupCounter(reservedId);
+        if (claimHeld) await releaseOutsidePickupClaim(imei);
+        opSubmitInFlight = false;
+        if (!recordSaved) {
+            // Keep the on-screen next number accurate after a failure or duplicate block.
+            try {
+                outsidePickupId = await peekOutsidePickupId();
+                const idEl = document.getElementById('outsidePickupIdDisplay');
+                if (idEl) idEl.textContent = outsidePickupId;
+            } catch (_) {
+                outsidePickupId = '';
+                const idEl = document.getElementById('outsidePickupIdDisplay');
+                if (idEl) idEl.textContent = 'Auto-generated on submit';
+            }
+        }
     }
 }
 
