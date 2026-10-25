@@ -445,11 +445,37 @@ async function openAttendanceOtpModal() {
     if (trimmedOtp.length !== 6) { Swal.fire({ icon: 'error', title: 'Invalid OTP', text: 'Please enter a valid 6-digit OTP.' }); return; }
     try {
         let otpData = null;
+        let otpSource = 'daily';
         const dailySnap = await db.ref('daily_otp/' + today + '/' + currentUser.username).once('value');
-        if (dailySnap.exists()) otpData = dailySnap.val();
-        else { const agentOtpSnap = await db.ref('otp/' + currentUser.username).once('value'); if (agentOtpSnap.exists()) otpData = agentOtpSnap.val(); }
+        if (dailySnap.exists()) {
+            otpData = dailySnap.val();
+        } else {
+            otpSource = 'legacy';
+            const agentOtpSnap = await db.ref('otp/' + currentUser.username).once('value');
+            if (agentOtpSnap.exists()) otpData = agentOtpSnap.val();
+        }
         if (!otpData || String(otpData.otp).trim() !== trimmedOtp) { Swal.fire({ icon: 'error', title: 'Incorrect OTP', text: "The OTP entered is incorrect. Ask Admin for today's OTP." }); return; }
         if (otpData.used === true) { Swal.fire({ icon: 'error', title: 'OTP Already Used', text: 'This OTP has already been used.' }); return; }
+
+        // The legacy otp/{username} record is shared across days, so it must
+        // carry today's date. Daily records also get checked when they have one.
+        const otpDate = String(otpData.valid_date || otpData.date || '').trim();
+        if ((otpSource === 'legacy' || otpDate) && otpDate !== today) {
+            Swal.fire({ icon: 'error', title: 'OTP Expired', text: "This OTP is not valid for today. Ask Admin for today's OTP." });
+            return;
+        }
+
+        const expiryRaw = otpData.expires_at !== undefined && otpData.expires_at !== null
+            ? otpData.expires_at
+            : otpData.expiresAt;
+        if (expiryRaw !== undefined && expiryRaw !== null && expiryRaw !== '') {
+            const expiryMs = typeof expiryRaw === 'number' ? expiryRaw : new Date(expiryRaw).getTime();
+            if (Number.isFinite(expiryMs) && Date.now() > expiryMs) {
+                Swal.fire({ icon: 'error', title: 'OTP Expired', text: 'This OTP has expired. Ask Admin to regenerate it.' });
+                return;
+            }
+        }
+
         await db.ref('attendance/' + currentUser.username + '/' + today).set({ status: 'present', timestamp: Date.now(), otp_used: trimmedOtp, blocked: false, salary_counted: true, marked_by: 'agent_otp' });
         if (dailySnap.exists()) await db.ref('daily_otp/' + today + '/' + currentUser.username + '/used').set(true);
         else await db.ref('otp/' + currentUser.username + '/used').set(true);
@@ -951,7 +977,8 @@ async function submitData() {
         }
         document.getElementById('orderId').value = ''; hiddenImei2 = '';
         goBack(); loadTodayStats(); loadPendingOrders();
-    } catch (error) { Swal.fire({ icon: 'error', title: 'Error', text: error.message }); }
+        return true;
+    } catch (error) { Swal.fire({ icon: 'error', title: 'Error', text: error.message }); return false; }
 }
 
 // === SECTION 17: SCANNER FUNCTIONS (Barcode + OCR) ===
@@ -1784,3 +1811,128 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('loginPassword').addEventListener('keydown', (e) => { if (e.key === 'Enter') loginUser(); });
     document.getElementById('loginUsername').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('loginPassword').focus(); });
 });
+
+// Pickup-only confirmation shown after the existing save and WhatsApp flow completes.
+(function () {
+    const CONFETTI_COLORS = ['#12CAA7', '#0FA88B', '#4f46e5', '#7c3aed', '#22d3ee', '#fbbf24'];
+    let autoHideT = null;
+
+    function scrapeFormDetails() {
+        const details = [];
+        const container = document.getElementById('formFields');
+        if (!container) return details;
+        const seen = new Set();
+
+        container.querySelectorAll('input, select, textarea').forEach(function (el) {
+            const val = (el.value || '').trim();
+            if (!val || (el.type === 'checkbox' && !el.checked) || el.type === 'file' || el.type === 'hidden') return;
+            let label = '';
+            let field = el;
+            while (field && field !== container && !label) {
+                const previous = field.previousElementSibling;
+                if (previous && previous.tagName === 'LABEL') label = previous.textContent.trim();
+                field = field.parentElement;
+            }
+            if (!label) label = el.getAttribute('placeholder') || el.id || 'Field';
+            const key = label + '::' + val;
+            if (seen.has(key)) return;
+            seen.add(key);
+            details.push({ label: label, value: val });
+        });
+
+        container.querySelectorAll('.spec-group').forEach(function (group) {
+            const titleEl = group.querySelector('.spec-label .t');
+            const title = titleEl ? titleEl.textContent.replace('*', '').trim() : '';
+            const active = group.querySelectorAll('.spec-chip.active');
+            if (active.length && title) {
+                const vals = Array.from(active).map(function (chip) { return chip.textContent.trim(); });
+                details.push({ label: title, value: vals.join(' + ') });
+            }
+        });
+
+        return details;
+    }
+
+    function buildConfetti() {
+        const container = document.getElementById('pickupConfetti');
+        if (!container) return;
+        container.innerHTML = '';
+        for (let i = 0; i < 42; i++) {
+            const piece = document.createElement('span');
+            piece.style.left = Math.random() * 100 + 'vw';
+            piece.style.background = CONFETTI_COLORS[i % CONFETTI_COLORS.length];
+            piece.style.animationDuration = (1.6 + Math.random() * 1.6) + 's';
+            piece.style.animationDelay = (Math.random() * 0.5) + 's';
+            piece.style.width = (6 + Math.random() * 6) + 'px';
+            piece.style.height = (10 + Math.random() * 8) + 'px';
+            piece.style.transform = 'rotate(' + (Math.random() * 360) + 'deg)';
+            container.appendChild(piece);
+        }
+        setTimeout(function () { container.innerHTML = ''; }, 4200);
+    }
+
+    function showPickupCompletion(payload) {
+        payload = payload || {};
+        const overlay = document.getElementById('pickupSuccessOverlay');
+        const orderIdEl = document.getElementById('pickupSuccessOrderId');
+        const detailsEl = document.getElementById('pickupSuccessDetails');
+        if (!overlay || !orderIdEl || !detailsEl) return;
+
+        const orderId = payload.orderId || (document.getElementById('orderId')?.value || '').trim() || '—';
+        const details = Array.isArray(payload.details) ? payload.details : [];
+        orderIdEl.textContent = orderId;
+        detailsEl.replaceChildren();
+
+        if (!details.length) {
+            details.push({ label: 'Status', value: 'Pickup Completed' });
+        }
+        details.forEach(function (detail, index) {
+            const row = document.createElement('div');
+            const label = document.createElement('span');
+            const value = document.createElement('span');
+            row.className = 'row';
+            row.style.animationDelay = (0.5 + index * 0.05) + 's';
+            label.className = 'k';
+            label.textContent = detail.label;
+            value.className = 'v';
+            value.textContent = detail.value;
+            row.append(label, value);
+            detailsEl.appendChild(row);
+        });
+
+        overlay.classList.add('show');
+        overlay.setAttribute('aria-hidden', 'false');
+        buildConfetti();
+        clearTimeout(autoHideT);
+        autoHideT = setTimeout(hidePickupCompletion, 5000);
+    }
+
+    function hidePickupCompletion() {
+        const overlay = document.getElementById('pickupSuccessOverlay');
+        if (overlay) {
+            overlay.classList.remove('show');
+            overlay.setAttribute('aria-hidden', 'true');
+        }
+        clearTimeout(autoHideT);
+    }
+
+    window.showPickupCompletion = showPickupCompletion;
+    window.hidePickupCompletion = hidePickupCompletion;
+
+    const originalSubmitData = window.submitData;
+    if (typeof originalSubmitData === 'function') {
+        window.submitData = async function () {
+            const wasPickup = currentStatus === 'pickup';
+            const capturedOrderId = (document.getElementById('orderId')?.value || '').trim().toUpperCase();
+            const capturedDetails = wasPickup ? scrapeFormDetails() : null;
+            const result = await originalSubmitData.apply(this, arguments);
+
+            if (wasPickup && result === true) {
+                setTimeout(function () {
+                    showPickupCompletion({ orderId: capturedOrderId, details: capturedDetails });
+                }, 400);
+            }
+            return result;
+        };
+    }
+})();
